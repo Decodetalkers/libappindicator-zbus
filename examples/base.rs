@@ -1,5 +1,6 @@
-use status_notifier::status_notifier_item::application;
+use status_notifier::status_notifier_item::tray;
 use zbus::fdo::Result;
+
 struct Base;
 
 impl Base {
@@ -29,18 +30,14 @@ impl Base {
 
 #[tokio::main]
 async fn main() {
-    let _connection = application(
-        Base::boot,
-        Base::id,
-        Base::activate,
-        Base::context_menu,
-        Base::scroll,
-        Base::secondary_activate,
-    )
-    .with_icon_name(Base::icon_name)
-    .run()
-    .await
-    .unwrap();
+    let _connection = tray(Base::boot, Base::id, Base::activate, Base::context_menu)
+        .with_icon_name(Base::icon_name)
+        .with_scroll(Base::scroll)
+        .with_secondary_activate(Base::secondary_activate)
+        .run()
+        .await
+        .unwrap();
+
     println!("{:?}", _connection.unique_name());
 
     std::future::pending::<()>().await;

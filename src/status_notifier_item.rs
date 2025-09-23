@@ -28,14 +28,14 @@ use zbus::{
 
 use crate::status_notifier_watcher::StatusNotifierWatcherProxy;
 
-#[derive(Clone, PartialEq, Type, OwnedValue, Value)]
+#[derive(Clone, PartialEq, Type, OwnedValue, Value, Debug, Default)]
 struct IconPixmap {
     width: i32,
     height: i32,
     data: Vec<u8>,
 }
 
-#[derive(Clone, PartialEq, Type, OwnedValue, Value)]
+#[derive(Clone, PartialEq, Type, OwnedValue, Value, Default, Debug)]
 struct ToolTip {
     icon: String,
     data: Vec<IconPixmap>,
@@ -54,8 +54,17 @@ pub trait StatusNotifierItemProgram {
     fn id(&self) -> String;
     fn activate(&self, state: &Self::State, x: i32, y: i32) -> zbus::fdo::Result<()>;
     fn context_menu(&self, state: &Self::State, x: i32, y: i32) -> zbus::fdo::Result<()>;
-    fn scroll(&self, state: &Self::State, delta: i32, orientation: &str) -> zbus::fdo::Result<()>;
-    fn secondary_activate(&self, state: &Self::State, x: i32, y: i32) -> zbus::fdo::Result<()>;
+    fn scroll(
+        &self,
+        _state: &Self::State,
+        _delta: i32,
+        _orientation: &str,
+    ) -> zbus::fdo::Result<()> {
+        Err(zbus::fdo::Error::NotSupported("Error".to_owned()))
+    }
+    fn secondary_activate(&self, _state: &Self::State, _x: i32, _y: i32) -> zbus::fdo::Result<()> {
+        Err(zbus::fdo::Error::NotSupported("Error".to_owned()))
+    }
     fn icon_name(&self, _state: &Self::State) -> zbus::fdo::Result<String> {
         Err(zbus::fdo::Error::NotSupported("Error".to_owned()))
     }
@@ -173,6 +182,24 @@ where
     ) -> StatusNotifier<impl StatusNotifierItemProgram<State = P::State>> {
         StatusNotifier {
             raw: with_icon_name(self.raw, f),
+        }
+    }
+
+    pub fn with_scroll(
+        self,
+        f: impl ScrollFn<P::State>,
+    ) -> StatusNotifier<impl StatusNotifierItemProgram<State = P::State>> {
+        StatusNotifier {
+            raw: with_scroll(self.raw, f),
+        }
+    }
+
+    pub fn with_secondary_activate(
+        self,
+        f: impl SecondaryActivateFn<P::State>,
+    ) -> StatusNotifier<impl StatusNotifierItemProgram<State = P::State>> {
+        StatusNotifier {
+            raw: with_secondary_activate(self.raw, f),
         }
     }
 }
@@ -311,44 +338,28 @@ where
     WithTheme { program, icon }
 }
 
-pub fn application<State>(
-    boot: impl BootFn<State>,
-    id: impl IdFn,
-    activate: impl ActivateFn<State>,
-    context_menu: impl ContextMenuFn<State>,
-    scroll: impl ScrollFn<State>,
-    secondary_activate: impl SecondaryActivateFn<State>,
-) -> StatusNotifier<impl StatusNotifierItemProgram<State = State>>
+fn with_scroll<P: StatusNotifierItemProgram>(
+    program: P,
+    scroll: impl ScrollFn<P::State>,
+) -> impl StatusNotifierItemProgram<State = P::State>
 where
-    State: 'static + Send + Sync,
+    P::State: 'static + Send + Sync,
 {
-    use std::marker::PhantomData;
-    struct Instance<State, IdFn, BootFn, ActivateFn, ContextMenuFn, ScrollFn, SecondaryActivateFn> {
-        boot: BootFn,
-        id: IdFn,
-        activate: ActivateFn,
-        context_menu: ContextMenuFn,
+    struct WithScroll<P, ScrollFn> {
+        program: P,
         scroll: ScrollFn,
-        secondary_activate: SecondaryActivateFn,
-        _state: PhantomData<State>,
     }
-    impl<State, IdFn, BootFn, ActivateFn, ContextMenuFn, ScrollFn, SecondaryActivateFn>
-        StatusNotifierItemProgram
-        for Instance<State, IdFn, BootFn, ActivateFn, ContextMenuFn, ScrollFn, SecondaryActivateFn>
+    impl<P: StatusNotifierItemProgram, ScrollFn> StatusNotifierItemProgram for WithScroll<P, ScrollFn>
     where
-        BootFn: self::BootFn<State>,
-        IdFn: self::IdFn,
-        ActivateFn: self::ActivateFn<State>,
-        ContextMenuFn: self::ContextMenuFn<State>,
-        ScrollFn: self::ScrollFn<State>,
-        SecondaryActivateFn: self::SecondaryActivateFn<State>,
+        ScrollFn: self::ScrollFn<P::State>,
     {
-        type State = State;
+        type State = P::State;
+
         fn id(&self) -> String {
-            self.id.id()
+            self.program.id()
         }
         fn boot(&self) -> Self::State {
-            self.boot.boot()
+            self.program.boot()
         }
         fn scroll(
             &self,
@@ -359,13 +370,110 @@ where
             self.scroll.scroll(state, delta, orientation)
         }
         fn context_menu(&self, state: &Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.context_menu(state, x, y)
+        }
+        fn activate(&self, state: &Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.activate(state, x, y)
+        }
+        fn secondary_activate(&self, state: &Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.secondary_activate(state, x, y)
+        }
+        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.icon_name(state)
+        }
+    }
+    WithScroll { program, scroll }
+}
+
+fn with_secondary_activate<P: StatusNotifierItemProgram>(
+    program: P,
+    secondary_activate: impl SecondaryActivateFn<P::State>,
+) -> impl StatusNotifierItemProgram<State = P::State>
+where
+    P::State: 'static + Send + Sync,
+{
+    struct WithSecondaryActive<P, SecondaryActivateFn> {
+        program: P,
+        secondary_activate: SecondaryActivateFn,
+    }
+    impl<P: StatusNotifierItemProgram, SecondaryActivateFn> StatusNotifierItemProgram
+        for WithSecondaryActive<P, SecondaryActivateFn>
+    where
+        SecondaryActivateFn: self::SecondaryActivateFn<P::State>,
+    {
+        type State = P::State;
+
+        fn id(&self) -> String {
+            self.program.id()
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn scroll(
+            &self,
+            state: &Self::State,
+            delta: i32,
+            orientation: &str,
+        ) -> zbus::fdo::Result<()> {
+            self.program.scroll(state, delta, orientation)
+        }
+        fn context_menu(&self, state: &Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.context_menu(state, x, y)
+        }
+        fn activate(&self, state: &Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.activate(state, x, y)
+        }
+        fn secondary_activate(&self, state: &Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.secondary_activate.secondary_activate(state, x, y)
+        }
+        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.icon_name(state)
+        }
+    }
+    WithSecondaryActive {
+        program,
+        secondary_activate,
+    }
+}
+
+pub fn tray<State>(
+    boot: impl BootFn<State>,
+    id: impl IdFn,
+    activate: impl ActivateFn<State>,
+    context_menu: impl ContextMenuFn<State>,
+) -> StatusNotifier<impl StatusNotifierItemProgram<State = State>>
+where
+    State: 'static + Send + Sync,
+{
+    use std::marker::PhantomData;
+    struct Instance<State, IdFn, BootFn, ActivateFn, ContextMenuFn> {
+        boot: BootFn,
+        id: IdFn,
+        activate: ActivateFn,
+        context_menu: ContextMenuFn,
+        _state: PhantomData<State>,
+    }
+    impl<State, IdFn, BootFn, ActivateFn, ContextMenuFn> StatusNotifierItemProgram
+        for Instance<State, IdFn, BootFn, ActivateFn, ContextMenuFn>
+    where
+        BootFn: self::BootFn<State>,
+        IdFn: self::IdFn,
+        ActivateFn: self::ActivateFn<State>,
+        ContextMenuFn: self::ContextMenuFn<State>,
+    {
+        type State = State;
+        fn id(&self) -> String {
+            self.id.id()
+        }
+        fn boot(&self) -> Self::State {
+            self.boot.boot()
+        }
+
+        fn context_menu(&self, state: &Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
             self.context_menu.context_menu(state, x, y)
         }
         fn activate(&self, state: &Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
             self.activate.activate(state, x, y)
-        }
-        fn secondary_activate(&self, state: &Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
-            self.secondary_activate.secondary_activate(state, x, y)
         }
     }
 
@@ -375,8 +483,6 @@ where
             id,
             activate,
             context_menu,
-            scroll,
-            secondary_activate,
             _state: PhantomData,
         },
     }
