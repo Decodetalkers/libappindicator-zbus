@@ -1,0 +1,10 @@
+[package]
+name = "status_notifier"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+zbus = "5.11.0"
+
+[dev-dependencies]
+tokio = { version = "1.47.1", features = ["full"] }
