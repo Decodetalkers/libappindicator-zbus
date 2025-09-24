@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    dbusmenu::{AboutToShowFn, DBusMenuInstance, DBusMenuItem, MenuBootFn},
+    dbusmenu::{AboutToShowFn, DBusMenuInstance, DBusMenuItem, DBusMenuBootFn},
     status_notifier_item::{
         ActivateFn, ContextMenuFn, IdFn, NotifierBootFn, ScrollFn, SecondaryActivateFn,
         StatusNotifierInstance, StatusNotifierItem,
@@ -80,6 +80,28 @@ where
     }
     pub fn unique_name(&self) -> Option<&zbus::names::OwnedUniqueName> {
         self.conn.unique_name()
+    }
+
+    pub async fn notify_id_changed(&self) -> zbus::Result<()> {
+        let iface_ref = self
+            .conn
+            .object_server()
+            .interface::<_, StatusNotifierInstance<P>>("/StatusNotifierItem")
+            .await?;
+        let iface = iface_ref.get().await;
+        iface.id_changed(iface_ref.signal_emitter()).await
+    }
+
+    pub async fn notify_layout_changed(&self, revision: u32, parent: i32) -> zbus::Result<()> {
+        let iface_ref = self
+            .conn
+            .object_server()
+            .interface::<_, DBusMenuInstance<M>>("/MenuBar")
+            .await?;
+        let _ = DBusMenuInstance::<M>::layout_updated(iface_ref.signal_emitter(), revision, parent)
+            .await;
+
+        Ok(())
     }
 }
 
@@ -381,7 +403,7 @@ pub fn tray<State, MenuState>(
     id: impl IdFn,
     activate: impl ActivateFn<State>,
 
-    menu_boot: impl MenuBootFn<MenuState>,
+    menu_boot: impl DBusMenuBootFn<MenuState>,
     about_to_show: impl AboutToShowFn<MenuState>,
 ) -> Tray<impl StatusNotifierItem<State = State>, impl DBusMenuItem<State = MenuState>>
 where
@@ -422,7 +444,7 @@ where
     impl<MenuState, MenuBootFn, AboutToShowFn> DBusMenuItem
         for MenuInstance<MenuState, MenuBootFn, AboutToShowFn>
     where
-        MenuBootFn: self::MenuBootFn<MenuState>,
+        MenuBootFn: self::DBusMenuBootFn<MenuState>,
         AboutToShowFn: self::AboutToShowFn<MenuState>,
     {
         type State = MenuState;

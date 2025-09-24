@@ -43,7 +43,7 @@ impl Menu {
 
 #[tokio::main]
 async fn main() {
-    let _connection = tray(
+    let connection = tray(
         Base::boot,
         Base::id,
         Base::activate,
@@ -58,7 +58,7 @@ async fn main() {
     .await
     .unwrap();
 
-    println!("{:?}", _connection.unique_name());
+    println!("{:?}", connection.unique_name());
 
     std::future::pending::<()>().await;
 }

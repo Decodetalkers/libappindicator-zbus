@@ -19,7 +19,27 @@
 //!
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
-use zbus::{interface, proxy};
+use serde::{Deserialize, Serialize};
+use zbus::zvariant::{OwnedValue, Type, as_value};
+use zbus::{interface, object_server::SignalEmitter, proxy};
+
+#[derive(Type, Debug, Default, Serialize, Deserialize)]
+/// Specified options for a [`Screencast::create_session`] request.
+#[zvariant(signature = "dict")]
+pub struct MenuData {
+    #[serde(with = "as_value")]
+    pub label: String,
+    #[serde(with = "as_value")]
+    pub enabled: bool,
+}
+
+// TODO: how to fix it
+#[derive(Type, Debug, Default, Serialize, Deserialize)]
+pub struct MenuItem {
+    id: u32,
+    item: MenuData,
+    sub_menus: Vec<OwnedValue>,
+}
 
 pub trait DBusMenuItem {
     type State;
@@ -34,11 +54,11 @@ pub struct DBusMenuInstance<Menu: DBusMenuItem> {
     pub(crate) state: Menu::State,
 }
 
-pub trait MenuBootFn<State> {
+pub trait DBusMenuBootFn<State> {
     fn boot(&self) -> State;
 }
 
-impl<T, State> MenuBootFn<State> for T
+impl<T, State> DBusMenuBootFn<State> for T
 where
     T: Fn() -> State,
 {
@@ -69,6 +89,45 @@ where
     fn about_to_show(&mut self, id: i32) -> zbus::fdo::Result<bool> {
         self.program.about_to_show(&mut self.state, id)
     }
+
+    /// Version property
+    #[zbus(property)]
+    fn version(&self) -> zbus::fdo::Result<u32> {
+        Ok(2)
+    }
+
+    /// Status property
+    #[zbus(property)]
+    fn status(&self) -> zbus::fdo::Result<String> {
+        Ok("Active".to_owned())
+    }
+
+    /// ItemActivationRequested signal
+    #[zbus(signal)]
+    pub async fn item_activation_requested(
+        ctxt: &SignalEmitter<'_>,
+        id: i32,
+        timestamp: u32,
+    ) -> zbus::Result<()>;
+
+    /// ItemsPropertiesUpdated signal
+    #[zbus(signal)]
+    pub async fn items_properties_updated(
+        ctxt: &SignalEmitter<'_>,
+        updated_props: Vec<(
+            i32,
+            std::collections::HashMap<&str, zbus::zvariant::Value<'_>>,
+        )>,
+        removed_props: Vec<(i32, Vec<&str>)>,
+    ) -> zbus::Result<()>;
+
+    /// LayoutUpdated signal
+    #[zbus(signal)]
+    pub async fn layout_updated(
+        ctxt: &SignalEmitter<'_>,
+        revision: u32,
+        parent: i32,
+    ) -> zbus::Result<()>;
 }
 
 #[proxy(interface = "com.canonical.dbusmenu", default_path = "/MenuBar")]
@@ -124,25 +183,6 @@ pub trait dbusmenu {
     /// GetProperty method
     fn get_property(&self, id: i32, name: &str) -> zbus::Result<zbus::zvariant::OwnedValue>;
 
-    /// ItemActivationRequested signal
-    #[zbus(signal)]
-    fn item_activation_requested(&self, id: i32, timestamp: u32) -> zbus::Result<()>;
-
-    /// ItemsPropertiesUpdated signal
-    #[zbus(signal)]
-    fn items_properties_updated(
-        &self,
-        updated_props: Vec<(
-            i32,
-            std::collections::HashMap<&str, zbus::zvariant::Value<'_>>,
-        )>,
-        removed_props: Vec<(i32, Vec<&str>)>,
-    ) -> zbus::Result<()>;
-
-    /// LayoutUpdated signal
-    #[zbus(signal)]
-    fn layout_updated(&self, revision: u32, parent: i32) -> zbus::Result<()>;
-
     /// IconThemePath property
     #[zbus(property)]
     fn icon_theme_path(&self) -> zbus::Result<Vec<String>>;
@@ -154,8 +194,4 @@ pub trait dbusmenu {
     /// TextDirection property
     #[zbus(property)]
     fn text_direction(&self) -> zbus::Result<String>;
-
-    /// Version property
-    #[zbus(property)]
-    fn version(&self) -> zbus::Result<u32>;
 }
