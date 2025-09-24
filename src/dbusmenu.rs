@@ -21,12 +21,7 @@
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use zbus::{interface, proxy};
 
-pub struct DBusMenuMin;
-
-#[interface(name = "com.canonical.dbusmenu")]
-impl DBusMenuMin {}
-
-pub trait DBusMenuTrait {
+pub trait DBusMenuItem {
     type State;
 
     fn boot(&self) -> Self::State;
@@ -34,19 +29,45 @@ pub trait DBusMenuTrait {
     fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool>;
 }
 
-pub struct DBusMenuInstance<Menu: DBusMenuTrait> {
-    raw: Menu,
-    state: Menu::State,
+pub struct DBusMenuInstance<Menu: DBusMenuItem> {
+    pub(crate) program: Menu,
+    pub(crate) state: Menu::State,
+}
+
+pub trait MenuBootFn<State> {
+    fn boot(&self) -> State;
+}
+
+impl<T, State> MenuBootFn<State> for T
+where
+    T: Fn() -> State,
+{
+    fn boot(&self) -> State {
+        self()
+    }
+}
+
+pub trait AboutToShowFn<State> {
+    fn about_to_show(&self, state: &mut State, id: i32) -> zbus::fdo::Result<bool>;
+}
+
+impl<T, State> AboutToShowFn<State> for T
+where
+    T: Fn(&mut State, i32) -> zbus::fdo::Result<bool>,
+{
+    fn about_to_show(&self, state: &mut State, id: i32) -> zbus::fdo::Result<bool> {
+        self(state, id)
+    }
 }
 
 #[interface(name = "com.canonical.dbusmenu")]
-impl<Menu: DBusMenuTrait> DBusMenuInstance<Menu>
+impl<Menu: DBusMenuItem> DBusMenuInstance<Menu>
 where
     Menu: Send + Sync + 'static,
     Menu::State: 'static + Send + Sync,
 {
     fn about_to_show(&mut self, id: i32) -> zbus::fdo::Result<bool> {
-        self.raw.about_to_show(&mut self.state, id)
+        self.program.about_to_show(&mut self.state, id)
     }
 }
 
