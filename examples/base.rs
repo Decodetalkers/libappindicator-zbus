@@ -10,17 +10,17 @@ impl Base {
     fn id() -> String {
         "Hello".to_owned()
     }
-    fn activate(&self, x: i32, y: i32) -> Result<()> {
+    fn activate(&mut self, x: i32, y: i32) -> Result<()> {
         println!("active");
         Ok(())
     }
-    fn context_menu(&self, x: i32, y: i32) -> Result<()> {
+    fn context_menu(&mut self, x: i32, y: i32) -> Result<()> {
         Ok(())
     }
-    fn scroll(&self, delta: i32, orientation: &str) -> Result<()> {
+    fn scroll(&mut self, delta: i32, orientation: &str) -> Result<()> {
         Ok(())
     }
-    fn secondary_activate(&self, x: i32, y: i32) -> Result<()> {
+    fn secondary_activate(&mut self, x: i32, y: i32) -> Result<()> {
         Ok(())
     }
     fn icon_name(&self) -> Result<String> {

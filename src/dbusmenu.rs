@@ -19,7 +19,37 @@
 //!
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
-use zbus::proxy;
+use zbus::{interface, proxy};
+
+pub struct DBusMenuMin;
+
+#[interface(name = "com.canonical.dbusmenu")]
+impl DBusMenuMin {}
+
+pub trait DBusMenuTrait {
+    type State;
+
+    fn boot(&self) -> Self::State;
+
+    fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool>;
+}
+
+pub struct DBusMenuInstance<Menu: DBusMenuTrait> {
+    raw: Menu,
+    state: Menu::State,
+}
+
+#[interface(name = "com.canonical.dbusmenu")]
+impl<Menu: DBusMenuTrait> DBusMenuInstance<Menu>
+where
+    Menu: Send + Sync + 'static,
+    Menu::State: 'static + Send + Sync,
+{
+    fn about_to_show(&mut self, id: i32) -> zbus::fdo::Result<bool> {
+        self.raw.about_to_show(&mut self.state, id)
+    }
+}
+
 #[proxy(interface = "com.canonical.dbusmenu", default_path = "/MenuBar")]
 pub trait dbusmenu {
     /// AboutToShow method
