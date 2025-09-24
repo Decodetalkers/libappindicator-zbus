@@ -20,7 +20,7 @@
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use serde::{Deserialize, Serialize};
-use zbus::zvariant::{OwnedValue, Type, as_value};
+use zbus::zvariant::{Type, as_value};
 use zbus::{interface, object_server::SignalEmitter, proxy};
 
 #[derive(Type, Debug, Default, Serialize, Deserialize)]
@@ -35,10 +35,17 @@ pub struct MenuData {
 
 // TODO: how to fix it
 #[derive(Type, Debug, Default, Serialize, Deserialize)]
+#[zvariant(signature = "(ia(sv)av)")]
 pub struct MenuItem {
-    id: u32,
+    id: i32,
     item: MenuData,
-    sub_menus: Vec<OwnedValue>,
+    sub_menus: Vec<MenuItem>,
+}
+
+#[derive(Type, Debug, Default, Serialize, Deserialize)]
+pub struct LayoutData {
+    re: u32,
+    data: MenuItem,
 }
 
 pub trait DBusMenuItem {
@@ -90,6 +97,15 @@ where
         self.program.about_to_show(&mut self.state, id)
     }
 
+    /// GetLayout method
+    fn get_layout(
+        &self,
+        _parent_id: i32,
+        _recursion_depth: i32,
+        _property_names: Vec<String>,
+    ) -> zbus::fdo::Result<LayoutData> {
+        todo!()
+    }
     /// Version property
     #[zbus(property)]
     fn version(&self) -> zbus::fdo::Result<u32> {
@@ -164,21 +180,6 @@ pub trait dbusmenu {
             std::collections::HashMap<String, zbus::zvariant::OwnedValue>,
         )>,
     >;
-
-    /// GetLayout method
-    fn get_layout(
-        &self,
-        parent_id: i32,
-        recursion_depth: i32,
-        property_names: &[&str],
-    ) -> zbus::Result<(
-        u32,
-        (
-            i32,
-            std::collections::HashMap<String, zbus::zvariant::OwnedValue>,
-            Vec<zbus::zvariant::OwnedValue>,
-        ),
-    )>;
 
     /// GetProperty method
     fn get_property(&self, id: i32, name: &str) -> zbus::Result<zbus::zvariant::OwnedValue>;
