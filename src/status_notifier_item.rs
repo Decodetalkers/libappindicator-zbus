@@ -19,6 +19,8 @@
 //!
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
+use std::marker::PhantomData;
+
 use zbus::{
     connection, interface,
     object_server::SignalEmitter,
@@ -48,7 +50,9 @@ pub trait StatusNotifierItem {
     fn boot(&self) -> Self::State;
     fn id(&self) -> String;
     fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()>;
-    fn context_menu(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()>;
+    fn context_menu(&self, _state: &mut Self::State, _x: i32, _y: i32) -> zbus::fdo::Result<()> {
+        Err(zbus::fdo::Error::NotSupported("Error".to_owned()))
+    }
     fn scroll(
         &self,
         _state: &mut Self::State,
@@ -150,12 +154,40 @@ pub struct Tray<P: StatusNotifierItem> {
     raw: P,
 }
 
+pub struct TrayConnection<P: StatusNotifierItem> {
+    conn: zbus::Connection,
+    _item: PhantomData<P>,
+}
+
+impl<P: StatusNotifierItem> TrayConnection<P>
+where
+    P::State: 'static + Send + Sync,
+    P: Send + Sync + 'static,
+{
+    pub async fn update_state<F>(&self, f: F) -> zbus::Result<()>
+    where
+        F: Fn(&mut P::State),
+    {
+        let iface_ref = self
+            .conn
+            .object_server()
+            .interface::<_, StatusNotifierInstance<P>>("/StatusNotifierItem")
+            .await?;
+        let mut data = iface_ref.get_mut().await;
+        f(&mut data.state);
+        Ok(())
+    }
+    pub fn unique_name(&self) -> Option<&zbus::names::OwnedUniqueName> {
+        self.conn.unique_name()
+    }
+}
+
 impl<P: StatusNotifierItem> Tray<P>
 where
     P::State: 'static + Send + Sync,
     P: Send + Sync + 'static,
 {
-    pub async fn run(self) -> zbus::Result<zbus::Connection> {
+    pub async fn run(self) -> zbus::Result<TrayConnection<P>> {
         let state = self.raw.boot();
 
         let instance = StatusNotifierInstance {
@@ -173,7 +205,10 @@ where
             .await?
             .register_status_notifier_item(&service)
             .await?;
-        Ok(conn)
+        Ok(TrayConnection {
+            conn,
+            _item: PhantomData,
+        })
     }
 
     pub fn with_icon_name(
@@ -200,6 +235,15 @@ where
     ) -> Tray<impl StatusNotifierItem<State = P::State>> {
         Tray {
             raw: with_secondary_activate(self.raw, f),
+        }
+    }
+
+    pub fn with_context_menu(
+        self,
+        f: impl ContextMenuFn<P::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>> {
+        Tray {
+            raw: with_context_menu(self.raw, f),
         }
     }
 }
@@ -343,6 +387,61 @@ where
     WithTheme { program, icon }
 }
 
+fn with_context_menu<P: StatusNotifierItem>(
+    program: P,
+    context_menu: impl ContextMenuFn<P::State>,
+) -> impl StatusNotifierItem<State = P::State>
+where
+    P::State: 'static + Send + Sync,
+{
+    struct WithContextMenu<P, ContextMenuFn> {
+        program: P,
+        context_menu: ContextMenuFn,
+    }
+    impl<P: StatusNotifierItem, ContextMenuFn> StatusNotifierItem for WithContextMenu<P, ContextMenuFn>
+    where
+        ContextMenuFn: self::ContextMenuFn<P::State>,
+    {
+        type State = P::State;
+
+        fn id(&self) -> String {
+            self.program.id()
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn scroll(
+            &self,
+            state: &mut Self::State,
+            delta: i32,
+            orientation: &str,
+        ) -> zbus::fdo::Result<()> {
+            self.program.scroll(state, delta, orientation)
+        }
+        fn context_menu(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.context_menu.context_menu(state, x, y)
+        }
+        fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.activate(state, x, y)
+        }
+        fn secondary_activate(
+            &self,
+            state: &mut Self::State,
+            x: i32,
+            y: i32,
+        ) -> zbus::fdo::Result<()> {
+            self.program.secondary_activate(state, x, y)
+        }
+        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.icon_name(state)
+        }
+    }
+    WithContextMenu {
+        program,
+        context_menu,
+    }
+}
+
 fn with_scroll<P: StatusNotifierItem>(
     program: P,
     scroll: impl ScrollFn<P::State>,
@@ -455,26 +554,23 @@ pub fn tray<State>(
     boot: impl BootFn<State>,
     id: impl IdFn,
     activate: impl ActivateFn<State>,
-    context_menu: impl ContextMenuFn<State>,
 ) -> Tray<impl StatusNotifierItem<State = State>>
 where
     State: 'static + Send + Sync,
 {
     use std::marker::PhantomData;
-    struct Instance<State, IdFn, BootFn, ActivateFn, ContextMenuFn> {
+    struct Instance<State, IdFn, BootFn, ActivateFn> {
         boot: BootFn,
         id: IdFn,
         activate: ActivateFn,
-        context_menu: ContextMenuFn,
         _state: PhantomData<State>,
     }
-    impl<State, IdFn, BootFn, ActivateFn, ContextMenuFn> StatusNotifierItem
-        for Instance<State, IdFn, BootFn, ActivateFn, ContextMenuFn>
+    impl<State, IdFn, BootFn, ActivateFn> StatusNotifierItem
+        for Instance<State, IdFn, BootFn, ActivateFn>
     where
         BootFn: self::BootFn<State>,
         IdFn: self::IdFn,
         ActivateFn: self::ActivateFn<State>,
-        ContextMenuFn: self::ContextMenuFn<State>,
     {
         type State = State;
         fn id(&self) -> String {
@@ -484,9 +580,6 @@ where
             self.boot.boot()
         }
 
-        fn context_menu(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
-            self.context_menu.context_menu(state, x, y)
-        }
         fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
             self.activate.activate(state, x, y)
         }
@@ -497,7 +590,6 @@ where
             boot,
             id,
             activate,
-            context_menu,
             _state: PhantomData,
         },
     }

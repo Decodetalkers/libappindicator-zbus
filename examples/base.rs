@@ -15,6 +15,7 @@ impl Base {
         Ok(())
     }
     fn context_menu(&mut self, x: i32, y: i32) -> Result<()> {
+        println!("receive");
         Ok(())
     }
     fn scroll(&mut self, delta: i32, orientation: &str) -> Result<()> {
@@ -30,7 +31,8 @@ impl Base {
 
 #[tokio::main]
 async fn main() {
-    let _connection = tray(Base::boot, Base::id, Base::activate, Base::context_menu)
+    let _connection = tray(Base::boot, Base::id, Base::activate)
+        .with_context_menu(Base::context_menu)
         .with_icon_name(Base::icon_name)
         .with_scroll(Base::scroll)
         .with_secondary_activate(Base::secondary_activate)
