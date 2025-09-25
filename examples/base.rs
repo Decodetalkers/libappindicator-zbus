@@ -1,8 +1,8 @@
 use status_notifier::{
-    dbusmenu::{MenuData, MenuItem},
+    dbusmenu::{MenuItem, MenuProperty},
     tray,
 };
-use zbus::fdo::Result;
+use zbus::{fdo::Result, zvariant::OwnedValue};
 
 struct Base;
 
@@ -53,18 +53,34 @@ impl Menu {
             1,
             MenuItem {
                 id: 1,
-                item: MenuData::submenu(),
-                sub_menus: vec![MenuItem {
-                    id: 2,
-                    item: MenuData {
-                        label: Some("Hello".to_owned()),
-                        icon_name: Some("input-method".to_owned()),
-                        ..Default::default()
-                    },
-                    sub_menus: vec![],
-                }],
+                item: MenuProperty::submenu(),
+                sub_menus: vec![
+                    OwnedValue::try_from(MenuItem {
+                        id: 2,
+                        item: MenuProperty {
+                            label: Some("Hello".to_owned()),
+                            icon_name: Some("input-method".to_owned()),
+                            ..Default::default()
+                        },
+                        sub_menus: vec![],
+                    })
+                    .unwrap(),
+                    OwnedValue::try_from(MenuItem {
+                        id: 3,
+                        item: MenuProperty {
+                            label: Some("Hello".to_owned()),
+                            icon_name: Some("input-method".to_owned()),
+                            ..Default::default()
+                        },
+                        sub_menus: vec![],
+                    })
+                    .unwrap(),
+                ],
             },
         ))
+    }
+    fn status(&self) -> Result<String> {
+        Ok("normal".to_string())
     }
 }
 
@@ -78,6 +94,7 @@ async fn main() {
         "SystemService",
         Menu::boot,
         Menu::about_to_show,
+        Menu::status,
     )
     .with_context_menu(Base::context_menu)
     .with_scroll(Base::scroll)
@@ -88,6 +105,8 @@ async fn main() {
     .unwrap();
 
     println!("{:?}", connection.unique_name());
+
+    let _ = connection.notify_layout_changed(0, 0).await;
 
     std::future::pending::<()>().await;
 }

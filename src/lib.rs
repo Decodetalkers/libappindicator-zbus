@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use crate::{
     dbusmenu::{
         AboutToShowFn, DBusMenuBootFn, DBusMenuInstance, DBusMenuItem, GetLayoutFn, MenuItem,
+        StatusFn,
     },
     status_notifier_item::{
         ActivateFn, ContextMenuFn, IdFn, NotifierBootFn, ScrollFn, SecondaryActivateFn,
@@ -461,6 +462,9 @@ fn with_layout<M: DBusMenuItem>(
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
         }
+        fn status(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.status(state)
+        }
     }
     WithLayout {
         program,
@@ -477,6 +481,7 @@ pub fn tray<State, MenuState>(
 
     menu_boot: impl DBusMenuBootFn<MenuState>,
     about_to_show: impl AboutToShowFn<MenuState>,
+    status: impl StatusFn<MenuState>,
 ) -> Tray<impl StatusNotifierItem<State = State>, impl DBusMenuItem<State = MenuState>>
 where
     State: 'static + Send + Sync,
@@ -517,17 +522,19 @@ where
             self.activate.activate(state, x, y)
         }
     }
-    struct MenuInstance<MenuState, MenuBootFn, AboutToShowFn> {
+    struct MenuInstance<MenuState, MenuBootFn, AboutToShowFn, StatusFn> {
         boot: MenuBootFn,
         about_to_show: AboutToShowFn,
+        status: StatusFn,
         _state: PhantomData<MenuState>,
     }
 
-    impl<MenuState, MenuBootFn, AboutToShowFn> DBusMenuItem
-        for MenuInstance<MenuState, MenuBootFn, AboutToShowFn>
+    impl<MenuState, MenuBootFn, AboutToShowFn, StatusFn> DBusMenuItem
+        for MenuInstance<MenuState, MenuBootFn, AboutToShowFn, StatusFn>
     where
         MenuBootFn: self::DBusMenuBootFn<MenuState>,
         AboutToShowFn: self::AboutToShowFn<MenuState>,
+        StatusFn: self::StatusFn<MenuState>,
     {
         type State = MenuState;
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -535,6 +542,9 @@ where
         }
         fn boot(&self) -> Self::State {
             self.boot.boot()
+        }
+        fn status(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.status.status(state)
         }
     }
     Tray {
@@ -549,6 +559,7 @@ where
         menu_raw: MenuInstance {
             boot: menu_boot,
             about_to_show,
+            status,
             _state: PhantomData,
         },
     }
