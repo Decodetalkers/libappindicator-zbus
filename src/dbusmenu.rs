@@ -20,32 +20,60 @@
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use serde::{Deserialize, Serialize};
-use zbus::zvariant::{Type, as_value};
+use zbus::zvariant::{Type, as_value::optional};
 use zbus::{interface, object_server::SignalEmitter, proxy};
 
-#[derive(Type, Debug, Default, Serialize, Deserialize)]
+#[derive(Type, Debug, Serialize, Deserialize, Default)]
 /// Specified options for a [`Screencast::create_session`] request.
 #[zvariant(signature = "dict")]
 pub struct MenuData {
-    #[serde(with = "as_value")]
-    pub label: String,
-    #[serde(with = "as_value")]
-    pub enabled: bool,
+    #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
+    pub label: Option<String>,
+    #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
+    pub icon_name: Option<String>,
+    #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
+    pub enabled: Option<bool>,
+    #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
+    pub children_display: Option<String>,
 }
 
-// TODO: how to fix it
+impl MenuData {
+    pub fn submenu() -> Self {
+        MenuData {
+            children_display: Some("submenu".to_owned()),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Type, Debug, Default, Serialize, Deserialize)]
-#[zvariant(signature = "(ia(sv)av)")]
+#[zvariant(signature = "(ia{sv}av)")]
 pub struct MenuItem {
-    id: i32,
-    item: MenuData,
-    sub_menus: Vec<MenuItem>,
+    pub id: i32,
+    pub item: MenuData,
+    pub sub_menus: Vec<MenuItem>,
+}
+
+impl MenuItem {
+    fn new() -> Self {
+        MenuItem {
+            id: 1,
+            item: MenuData::submenu(),
+            sub_menus: vec![],
+        }
+    }
 }
 
 #[derive(Type, Debug, Default, Serialize, Deserialize)]
 pub struct LayoutData {
-    re: u32,
-    data: MenuItem,
+    pub revision: u32,
+    pub data: MenuItem,
+}
+
+#[derive(Type, Debug, Default, Serialize, Deserialize)]
+pub struct PropertyItem {
+    pub id: i32,
+    pub item: MenuData,
 }
 
 pub trait DBusMenuItem {
@@ -54,6 +82,15 @@ pub trait DBusMenuItem {
     fn boot(&self) -> Self::State;
 
     fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool>;
+    fn get_layout(
+        &self,
+        _state: &mut Self::State,
+        _parent_id: i32,
+        _recursion_depth: i32,
+        _property_names: Vec<String>,
+    ) -> zbus::fdo::Result<(u32, MenuItem)> {
+        Ok((1, MenuItem::new()))
+    }
 }
 
 pub struct DBusMenuInstance<Menu: DBusMenuItem> {
@@ -87,6 +124,31 @@ where
     }
 }
 
+pub trait GetLayoutFn<State> {
+    fn get_layout(
+        &self,
+        state: &mut State,
+        parent_id: i32,
+        recursion_depth: i32,
+        property_names: Vec<String>,
+    ) -> zbus::fdo::Result<(u32, MenuItem)>;
+}
+
+impl<T, State> GetLayoutFn<State> for T
+where
+    T: Fn(&mut State, i32, i32, Vec<String>) -> zbus::fdo::Result<(u32, MenuItem)>,
+{
+    fn get_layout(
+        &self,
+        state: &mut State,
+        parent_id: i32,
+        recursion_depth: i32,
+        property_names: Vec<String>,
+    ) -> zbus::fdo::Result<(u32, MenuItem)> {
+        self(state, parent_id, recursion_depth, property_names)
+    }
+}
+
 #[interface(name = "com.canonical.dbusmenu")]
 impl<Menu: DBusMenuItem> DBusMenuInstance<Menu>
 where
@@ -99,13 +161,30 @@ where
 
     /// GetLayout method
     fn get_layout(
-        &self,
-        _parent_id: i32,
-        _recursion_depth: i32,
-        _property_names: Vec<String>,
-    ) -> zbus::fdo::Result<LayoutData> {
-        todo!()
+        &mut self,
+        parent_id: i32,
+        recursion_depth: i32,
+        property_names: Vec<String>,
+    ) -> zbus::fdo::Result<(u32, MenuItem)> {
+        println!("{parent_id}, {recursion_depth}, {property_names:?}");
+        self.program
+            .get_layout(&mut self.state, parent_id, recursion_depth, property_names)
     }
+
+    /// GetGroupProperties method
+    fn get_group_properties(
+        &self,
+        _ids: Vec<i32>,
+        _property_names: Vec<String>,
+    ) -> zbus::fdo::Result<Vec<PropertyItem>> {
+        Ok(vec![])
+    }
+
+    /// GetProperty method
+    fn get_property(&self, _id: i32, _name: String) -> zbus::fdo::Result<PropertyItem> {
+        Ok(PropertyItem::default())
+    }
+
     /// Version property
     #[zbus(property)]
     fn version(&self) -> zbus::fdo::Result<u32> {
@@ -115,7 +194,7 @@ where
     /// Status property
     #[zbus(property)]
     fn status(&self) -> zbus::fdo::Result<String> {
-        Ok("Active".to_owned())
+        Ok("normal".to_owned())
     }
 
     /// ItemActivationRequested signal
@@ -168,21 +247,6 @@ pub trait dbusmenu {
         &self,
         events: &[&(i32, &str, &zbus::zvariant::Value<'_>, u32)],
     ) -> zbus::Result<Vec<i32>>;
-
-    /// GetGroupProperties method
-    fn get_group_properties(
-        &self,
-        ids: &[i32],
-        property_names: &[&str],
-    ) -> zbus::Result<
-        Vec<(
-            i32,
-            std::collections::HashMap<String, zbus::zvariant::OwnedValue>,
-        )>,
-    >;
-
-    /// GetProperty method
-    fn get_property(&self, id: i32, name: &str) -> zbus::Result<zbus::zvariant::OwnedValue>;
 
     /// IconThemePath property
     #[zbus(property)]

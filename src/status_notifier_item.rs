@@ -66,9 +66,9 @@ pub trait StatusNotifierItem {
     ) -> zbus::fdo::Result<()> {
         Err(zbus::fdo::Error::NotSupported("Error".to_owned()))
     }
-    fn icon_name(&self, _state: &Self::State) -> zbus::fdo::Result<String> {
-        Err(zbus::fdo::Error::NotSupported("Error".to_owned()))
-    }
+    fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String>;
+
+    fn category(&self) -> zbus::fdo::Result<String>;
 }
 
 pub trait NotifierBootFn<State> {
@@ -181,27 +181,27 @@ where
 
     /// NewIcon signal
     #[zbus(signal)]
-    async fn new_icon(ctxt: &SignalEmitter<'_>) -> zbus::Result<()>;
+    pub async fn new_icon(ctxt: &SignalEmitter<'_>) -> zbus::Result<()>;
 
     /// NewMenu signal
     #[zbus(signal)]
-    async fn new_menu(ctxt: &SignalEmitter<'_>) -> zbus::Result<()>;
+    pub async fn new_menu(ctxt: &SignalEmitter<'_>) -> zbus::Result<()>;
 
     /// NewOverlayIcon signal
     #[zbus(signal)]
-    async fn new_overlay_icon(ctxt: &SignalEmitter<'_>) -> zbus::Result<()>;
+    pub async fn new_overlay_icon(ctxt: &SignalEmitter<'_>) -> zbus::Result<()>;
 
     /// NewStatus signal
     #[zbus(signal)]
-    async fn new_status(ctxt: &SignalEmitter<'_>, status: &str) -> zbus::Result<()>;
+    pub async fn new_status(ctxt: &SignalEmitter<'_>, status: &str) -> zbus::Result<()>;
 
     /// NewTitle signal
     #[zbus(signal)]
-    async fn new_title(ctxt: &SignalEmitter<'_>) -> zbus::Result<()>;
+    pub async fn new_title(ctxt: &SignalEmitter<'_>) -> zbus::Result<()>;
 
     /// NewToolTip signal
     #[zbus(signal)]
-    async fn new_tool_tip(ctxt: &SignalEmitter<'_>) -> zbus::Result<()>;
+    pub async fn new_tool_tip(ctxt: &SignalEmitter<'_>) -> zbus::Result<()>;
 
     /// Menu property
     #[zbus(property)]
@@ -214,7 +214,11 @@ where
     fn icon_name(&self) -> zbus::fdo::Result<String> {
         self.program.icon_name(&self.state)
     }
-
+    /// Category property
+    #[zbus(property)]
+    fn category(&self) -> zbus::fdo::Result<String> {
+        self.program.category()
+    }
     /// Id property
     #[zbus(property)]
     fn id(&self) -> zbus::fdo::Result<String> {
@@ -250,10 +254,6 @@ pub trait StatusNotifierItemBackend {
     /// AttentionMovieName property
     #[zbus(property)]
     fn attention_movie_name(&self) -> zbus::Result<String>;
-
-    /// Category property
-    #[zbus(property)]
-    fn category(&self) -> zbus::Result<String>;
 
     /// IconPixmap property
     #[zbus(property)]

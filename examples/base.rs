@@ -1,4 +1,7 @@
-use status_notifier::tray;
+use status_notifier::{
+    dbusmenu::{MenuData, MenuItem},
+    tray,
+};
 use zbus::fdo::Result;
 
 struct Base;
@@ -39,6 +42,30 @@ impl Menu {
         println!("{id}");
         Ok(true)
     }
+
+    fn get_layout(
+        &mut self,
+        _parent_id: i32,
+        _recursion_depth: i32,
+        _property_name: Vec<String>,
+    ) -> Result<(u32, MenuItem)> {
+        Ok((
+            1,
+            MenuItem {
+                id: 1,
+                item: MenuData::submenu(),
+                sub_menus: vec![MenuItem {
+                    id: 2,
+                    item: MenuData {
+                        label: Some("Hello".to_owned()),
+                        icon_name: Some("input-method".to_owned()),
+                        ..Default::default()
+                    },
+                    sub_menus: vec![],
+                }],
+            },
+        ))
+    }
 }
 
 #[tokio::main]
@@ -47,13 +74,15 @@ async fn main() {
         Base::boot,
         Base::id,
         Base::activate,
+        Base::icon_name,
+        "SystemService",
         Menu::boot,
         Menu::about_to_show,
     )
     .with_context_menu(Base::context_menu)
-    .with_icon_name(Base::icon_name)
     .with_scroll(Base::scroll)
     .with_secondary_activate(Base::secondary_activate)
+    .with_layout(Menu::get_layout)
     .run()
     .await
     .unwrap();
