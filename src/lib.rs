@@ -2,9 +2,9 @@ use std::marker::PhantomData;
 
 use crate::{
     dbusmenu::{
-        AboutToShowFn, DBusMenuBootFn, DBusMenuInstance, DBusMenuItem, EventUpdate,
-        GetGroupPropertiesFn, GetLayoutFn, MenuItem, MenuStatus, MenuStatusFn, OnClickedFn,
-        OnToggledFn, TextDirectionFn,
+        AboutToShowFn, AboutToShowGroupFn, DBusMenuBootFn, DBusMenuInstance, DBusMenuItem,
+        EventUpdate, GetGroupPropertiesFn, GetLayoutFn, MenuItem, MenuStatus, MenuStatusFn,
+        OnClickedFn, OnToggledFn, TextDirectionFn,
     },
     status_notifier_item::{
         ActivateFn, AttentionIconNameFn, CategoryFn, ContextMenuFn, IconNameFn, IdFn, ItemIsMenuFn,
@@ -298,6 +298,16 @@ where
         Tray {
             notifier_raw: self.notifier_raw,
             menu_raw: with_text_direction(self.menu_raw, f),
+        }
+    }
+
+    pub fn with_about_to_show_group(
+        self,
+        f: impl AboutToShowGroupFn<M::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: self.notifier_raw,
+            menu_raw: with_about_to_show_group(self.menu_raw, f),
         }
     }
 }
@@ -947,6 +957,13 @@ fn with_layout<M: DBusMenuItem>(
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
         }
+        fn about_to_show_group(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+        ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+            self.program.about_to_show_group(state, ids)
+        }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             self.program.status(state)
         }
@@ -1012,6 +1029,13 @@ fn with_get_group_properties<M: DBusMenuItem>(
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
         }
+        fn about_to_show_group(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+        ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+            self.program.about_to_show_group(state, ids)
+        }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             self.program.status(state)
         }
@@ -1076,6 +1100,13 @@ fn with_menu_status<M: DBusMenuItem>(
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
         }
+        fn about_to_show_group(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+        ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+            self.program.about_to_show_group(state, ids)
+        }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             Ok(self.menu_status.status(state))
         }
@@ -1139,6 +1170,13 @@ fn with_on_clicked<M: DBusMenuItem>(
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
         }
+        fn about_to_show_group(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+        ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+            self.program.about_to_show_group(state, ids)
+        }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             self.program.status(state)
         }
@@ -1173,6 +1211,74 @@ fn with_on_clicked<M: DBusMenuItem>(
     }
 }
 
+fn with_on_toggled<M: DBusMenuItem>(
+    program: M,
+    on_toggled: impl OnToggledFn<M::State>,
+) -> impl DBusMenuItem<State = M::State> {
+    struct WithOnToggled<M, OnToggledFn> {
+        program: M,
+        on_toggled: OnToggledFn,
+    }
+
+    impl<M: DBusMenuItem, OnToggledFn> DBusMenuItem for WithOnToggled<M, OnToggledFn>
+    where
+        OnToggledFn: self::OnToggledFn<M::State>,
+    {
+        type State = M::State;
+        fn get_layout(
+            &self,
+            state: &mut Self::State,
+            parent_id: i32,
+            recursion_depth: i32,
+            property_names: Vec<String>,
+        ) -> zbus::fdo::Result<(u32, MenuItem)> {
+            self.program
+                .get_layout(state, parent_id, recursion_depth, property_names)
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
+            self.program.about_to_show(state, id)
+        }
+        fn about_to_show_group(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+        ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+            self.program.about_to_show_group(state, ids)
+        }
+        fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
+            self.program.status(state)
+        }
+        fn get_group_properties(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+            property_names: Vec<String>,
+        ) -> zbus::fdo::Result<Vec<dbusmenu::PropertyItem>> {
+            self.program
+                .get_group_properties(state, ids, property_names)
+        }
+        fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
+            self.program.on_clicked(state, id, timestamp)
+        }
+        fn on_toggled(
+            &self,
+            state: &mut Self::State,
+            id: i32,
+            status: dbusmenu::ToggleState,
+            timestamp: u32,
+        ) -> EventUpdate {
+            self.on_toggled.on_toggled(state, id, status, timestamp)
+        }
+    }
+    WithOnToggled {
+        program,
+        on_toggled,
+    }
+}
+
 fn with_text_direction<M: DBusMenuItem>(
     program: M,
     text_direction: impl TextDirectionFn<M::State>,
@@ -1202,6 +1308,13 @@ fn with_text_direction<M: DBusMenuItem>(
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
+        }
+        fn about_to_show_group(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+        ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+            self.program.about_to_show_group(state, ids)
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             self.program.status(state)
@@ -1237,18 +1350,19 @@ fn with_text_direction<M: DBusMenuItem>(
     }
 }
 
-fn with_on_toggled<M: DBusMenuItem>(
+fn with_about_to_show_group<M: DBusMenuItem>(
     program: M,
-    on_toggled: impl OnToggledFn<M::State>,
+    about_to_show_group: impl AboutToShowGroupFn<M::State>,
 ) -> impl DBusMenuItem<State = M::State> {
-    struct WithOnToggled<M, OnToggledFn> {
+    struct WithAboutToShowGroup<M, AboutToShowGroupFn> {
         program: M,
-        on_toggled: OnToggledFn,
+        about_to_show_group: AboutToShowGroupFn,
     }
 
-    impl<M: DBusMenuItem, OnToggledFn> DBusMenuItem for WithOnToggled<M, OnToggledFn>
+    impl<M: DBusMenuItem, AboutToShowGroupFn> DBusMenuItem
+        for WithAboutToShowGroup<M, AboutToShowGroupFn>
     where
-        OnToggledFn: self::OnToggledFn<M::State>,
+        AboutToShowGroupFn: self::AboutToShowGroupFn<M::State>,
     {
         type State = M::State;
         fn get_layout(
@@ -1266,6 +1380,13 @@ fn with_on_toggled<M: DBusMenuItem>(
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
+        }
+        fn about_to_show_group(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+        ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+            self.about_to_show_group.about_to_show_group(state, ids)
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             self.program.status(state)
@@ -1289,15 +1410,16 @@ fn with_on_toggled<M: DBusMenuItem>(
             status: dbusmenu::ToggleState,
             timestamp: u32,
         ) -> EventUpdate {
-            self.on_toggled.on_toggled(state, id, status, timestamp)
+            self.program.on_toggled(state, id, status, timestamp)
         }
     }
-    WithOnToggled {
+    WithAboutToShowGroup {
         program,
-        on_toggled,
+        about_to_show_group,
     }
 }
 
+// NOTE: main function
 pub fn tray<State, MenuState>(
     boot: impl NotifierBootFn<State>,
     id: impl IdFn,

@@ -120,6 +120,16 @@ pub trait DBusMenuItem {
 
     fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool>;
 
+    /// AboutToShowGroup method
+    #[allow(unused)]
+    fn about_to_show_group(
+        &self,
+        state: &mut Self::State,
+        ids: Vec<i32>,
+    ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+        Err(zbus::fdo::Error::Failed("Unimplemented".to_string()))
+    }
+
     #[allow(unused)]
     fn get_layout(
         &self,
@@ -320,6 +330,27 @@ where
     }
 }
 
+pub trait AboutToShowGroupFn<State> {
+    fn about_to_show_group(
+        &self,
+        state: &mut State,
+        ids: Vec<i32>,
+    ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)>;
+}
+
+impl<T, State> AboutToShowGroupFn<State> for T
+where
+    T: Fn(&mut State, Vec<i32>) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)>,
+{
+    fn about_to_show_group(
+        &self,
+        state: &mut State,
+        ids: Vec<i32>,
+    ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+        self(state, ids)
+    }
+}
+
 #[interface(name = "com.canonical.dbusmenu")]
 impl<Menu: DBusMenuItem> DBusMenuInstance<Menu>
 where
@@ -329,7 +360,10 @@ where
     fn about_to_show(&mut self, id: i32) -> zbus::fdo::Result<bool> {
         self.program.about_to_show(&mut self.state, id)
     }
-
+    /// AboutToShowGroup method
+    fn about_to_show_group(&mut self, ids: Vec<i32>) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+        self.program.about_to_show_group(&mut self.state, ids)
+    }
     /// GetLayout method
     fn get_layout(
         &mut self,
@@ -472,9 +506,6 @@ where
 
 #[proxy(interface = "com.canonical.dbusmenu", default_path = "/MenuBar")]
 pub trait dbusmenu {
-    /// AboutToShowGroup method
-    fn about_to_show_group(&self, ids: &[i32]) -> zbus::Result<(Vec<i32>, Vec<i32>)>;
-
     /// IconThemePath property
     #[zbus(property)]
     fn icon_theme_path(&self) -> zbus::Result<Vec<String>>;
