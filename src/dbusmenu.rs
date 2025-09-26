@@ -51,6 +51,16 @@ pub struct MenuProperty {
 }
 
 impl MenuProperty {
+    /// Key name
+    pub const LABEL: &str = "label";
+    pub const ICON_NAME: &str = "icon-name";
+    pub const ENABLED: &str = "enabled";
+    pub const TOGGLE_TYPE: &str = "toggle-type";
+    pub const TOGGLE_STATE: &str = "toggle-state";
+    pub const CHILDREN_DISPLAY: &str = "children-display";
+}
+
+impl MenuProperty {
     pub fn submenu() -> Self {
         MenuProperty {
             label: Some("root".to_owned()),
@@ -380,10 +390,7 @@ where
     #[zbus(signal)]
     pub async fn items_properties_updated(
         ctxt: &SignalEmitter<'_>,
-        updated_props: Vec<(
-            i32,
-            std::collections::HashMap<&str, zbus::zvariant::Value<'_>>,
-        )>,
+        updated_props: Vec<(i32, MenuProperty)>,
         removed_props: Vec<(i32, Vec<&str>)>,
     ) -> zbus::Result<()>;
 
