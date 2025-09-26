@@ -24,7 +24,6 @@ use serde::{Deserialize, Serialize};
 use zbus::{
     interface,
     object_server::SignalEmitter,
-    proxy,
     zvariant::{OwnedObjectPath, OwnedValue, Type, Value},
 };
 
@@ -139,6 +138,11 @@ pub trait StatusNotifierItem {
     #[allow(unused)]
     fn item_is_menu(&self, state: &Self::State) -> bool {
         false
+    }
+
+    #[allow(unused)]
+    fn window_id(&self, state: &Self::State) -> zbus::fdo::Result<i32> {
+        Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
     }
 }
 
@@ -487,6 +491,25 @@ where
     }
 }
 
+pub trait WindowIdFn<State> {
+    fn window_id(&self, state: &State) -> i32;
+}
+
+impl<State> WindowIdFn<State> for i32 {
+    fn window_id(&self, _state: &State) -> i32 {
+        *self
+    }
+}
+
+impl<State, T> WindowIdFn<State> for T
+where
+    T: Fn(&State) -> i32,
+{
+    fn window_id(&self, state: &State) -> i32 {
+        self(state)
+    }
+}
+
 pub struct StatusNotifierInstance<P: StatusNotifierItem> {
     pub(crate) program: P,
     pub(crate) state: P::State,
@@ -632,14 +655,9 @@ where
     fn item_is_menu(&self) -> zbus::fdo::Result<bool> {
         Ok(self.program.item_is_menu(&self.state))
     }
-}
 
-#[proxy(
-    interface = "org.kde.StatusNotifierItem",
-    default_path = "/StatusNotifierItem"
-)]
-pub trait StatusNotifierItemBackend {
-    /// WindowId property
     #[zbus(property)]
-    fn window_id(&self) -> zbus::Result<i32>;
+    fn window_id(&self) -> zbus::fdo::Result<i32> {
+        self.program.window_id(&self.state)
+    }
 }
