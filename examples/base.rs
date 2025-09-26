@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use status_notifier::{
-    dbusmenu::{MenuItem, MenuProperty, PropertyItem},
+    dbusmenu::{MenuItem, MenuProperty, MenuStatus, PropertyItem},
     tray,
 };
 use zbus::{fdo::Result, zvariant::OwnedValue};
@@ -110,8 +110,8 @@ impl Menu {
         ])
     }
 
-    fn status(&self) -> Result<String> {
-        Ok("normal".to_string())
+    fn status(&self) -> MenuStatus {
+        MenuStatus::Normal
     }
 }
 
@@ -124,7 +124,6 @@ async fn main() {
         "fake_nheko",
         Menu::boot,
         Menu::about_to_show,
-        Menu::status,
     )
     .with_activate(Base::activate)
     .with_category("ApplicationStatus")
@@ -133,6 +132,7 @@ async fn main() {
     .with_secondary_activate(Base::secondary_activate)
     .with_layout(Menu::get_layout)
     .with_get_group_properties(Menu::get_group_properties)
+    .with_menu_status(Menu::status)
     .run()
     .await
     .unwrap();

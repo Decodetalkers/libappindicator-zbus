@@ -3,11 +3,11 @@ use std::marker::PhantomData;
 use crate::{
     dbusmenu::{
         AboutToShowFn, DBusMenuBootFn, DBusMenuInstance, DBusMenuItem, GetGroupPropertiesFn,
-        GetLayoutFn, MenuItem, StatusFn,
+        GetLayoutFn, MenuItem, MenuStatus, MenuStatusFn,
     },
     status_notifier_item::{
-        ActivateFn, CategoryFn, ContextMenuFn, IconNameFn, IdFn, NotifierBootFn, ScrollFn,
-        SecondaryActivateFn, StatusNotifierInstance, StatusNotifierItem, TitleFn,
+        ActivateFn, CategoryFn, ContextMenuFn, IconNameFn, IdFn, NotifierBootFn, NotifierStatusFn,
+        ScrollFn, SecondaryActivateFn, StatusNotifierInstance, StatusNotifierItem, TitleFn,
     },
     status_notifier_watcher::StatusNotifierWatcherProxy,
 };
@@ -189,6 +189,17 @@ where
             menu_raw: self.menu_raw,
         }
     }
+
+    pub fn with_tray_status(
+        self,
+        f: impl NotifierStatusFn<P::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: with_tray_status(self.notifier_raw, f),
+            menu_raw: self.menu_raw,
+        }
+    }
+
     pub fn with_secondary_activate(
         self,
         f: impl SecondaryActivateFn<P::State>,
@@ -227,7 +238,18 @@ where
             menu_raw: with_get_group_properties(self.menu_raw, f),
         }
     }
+
+    pub fn with_menu_status(
+        self,
+        f: impl MenuStatusFn<M::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: self.notifier_raw,
+            menu_raw: with_menu_status(self.menu_raw, f),
+        }
+    }
 }
+
 fn with_icon_name<P: StatusNotifierItem>(
     program: P,
     icon: impl Fn(&P::State) -> zbus::fdo::Result<String>,
@@ -278,6 +300,12 @@ fn with_icon_name<P: StatusNotifierItem>(
         }
         fn category(&self) -> zbus::fdo::Result<String> {
             self.program.category()
+        }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
         }
     }
     WithTheme { program, icon }
@@ -333,6 +361,12 @@ fn with_context_menu<P: StatusNotifierItem>(
         }
         fn category(&self) -> zbus::fdo::Result<String> {
             self.program.category()
+        }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
         }
     }
     WithContextMenu {
@@ -392,9 +426,16 @@ fn with_scroll<P: StatusNotifierItem>(
         fn category(&self) -> zbus::fdo::Result<String> {
             self.program.category()
         }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
+        }
     }
     WithScroll { program, scroll }
 }
+
 fn with_category<P: StatusNotifierItem>(
     program: P,
     category: impl CategoryFn,
@@ -447,6 +488,12 @@ fn with_category<P: StatusNotifierItem>(
         }
         fn category(&self) -> zbus::fdo::Result<String> {
             Ok(self.category.category())
+        }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
         }
     }
     WithCategory { program, category }
@@ -503,6 +550,12 @@ fn with_activate<P: StatusNotifierItem>(
         }
         fn category(&self) -> zbus::fdo::Result<String> {
             self.program.category()
+        }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
         }
     }
     WithActive { program, activate }
@@ -561,11 +614,79 @@ fn with_secondary_activate<P: StatusNotifierItem>(
         fn category(&self) -> zbus::fdo::Result<String> {
             self.program.category()
         }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
+        }
     }
     WithSecondaryActive {
         program,
         secondary_activate,
     }
+}
+
+fn with_tray_status<P: StatusNotifierItem>(
+    program: P,
+    status: impl NotifierStatusFn<P::State>,
+) -> impl StatusNotifierItem<State = P::State> {
+    struct WithStatus<P, StatusFn> {
+        program: P,
+        status: StatusFn,
+    }
+    impl<P: StatusNotifierItem, StatusFn> StatusNotifierItem for WithStatus<P, StatusFn>
+    where
+        StatusFn: self::NotifierStatusFn<P::State>,
+    {
+        type State = P::State;
+
+        fn id(&self) -> String {
+            self.program.id()
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn scroll(
+            &self,
+            state: &mut Self::State,
+            delta: i32,
+            orientation: &str,
+        ) -> zbus::fdo::Result<()> {
+            self.program.scroll(state, delta, orientation)
+        }
+        fn context_menu(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.context_menu(state, x, y)
+        }
+        fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.activate(state, x, y)
+        }
+
+        fn secondary_activate(
+            &self,
+            state: &mut Self::State,
+            x: i32,
+            y: i32,
+        ) -> zbus::fdo::Result<()> {
+            self.program.secondary_activate(state, x, y)
+        }
+        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.icon_name(state)
+        }
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.title(state)
+        }
+        fn category(&self) -> zbus::fdo::Result<String> {
+            self.program.category()
+        }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            Ok(self.status.status(state))
+        }
+    }
+    WithStatus { program, status }
 }
 
 fn with_layout<M: DBusMenuItem>(
@@ -598,7 +719,7 @@ fn with_layout<M: DBusMenuItem>(
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
         }
-        fn status(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+        fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             self.program.status(state)
         }
         fn get_group_properties(
@@ -648,7 +769,7 @@ fn with_get_group_properties<M: DBusMenuItem>(
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
         }
-        fn status(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+        fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             self.program.status(state)
         }
         fn get_group_properties(
@@ -667,6 +788,55 @@ fn with_get_group_properties<M: DBusMenuItem>(
     }
 }
 
+fn with_menu_status<M: DBusMenuItem>(
+    program: M,
+    menu_status: impl MenuStatusFn<M::State>,
+) -> impl DBusMenuItem<State = M::State> {
+    struct WithMenuStatus<M, MenuStatusFn> {
+        program: M,
+        menu_status: MenuStatusFn,
+    }
+
+    impl<M: DBusMenuItem, MenuStatusFn> DBusMenuItem for WithMenuStatus<M, MenuStatusFn>
+    where
+        MenuStatusFn: self::MenuStatusFn<M::State>,
+    {
+        type State = M::State;
+        fn get_layout(
+            &self,
+            state: &mut Self::State,
+            parent_id: i32,
+            recursion_depth: i32,
+            property_names: Vec<String>,
+        ) -> zbus::fdo::Result<(u32, MenuItem)> {
+            self.program
+                .get_layout(state, parent_id, recursion_depth, property_names)
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
+            self.program.about_to_show(state, id)
+        }
+        fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
+            Ok(self.menu_status.status(state))
+        }
+        fn get_group_properties(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+            property_names: Vec<String>,
+        ) -> zbus::fdo::Result<Vec<dbusmenu::PropertyItem>> {
+            self.program
+                .get_group_properties(state, ids, property_names)
+        }
+    }
+    WithMenuStatus {
+        program,
+        menu_status,
+    }
+}
+
 pub fn tray<State, MenuState>(
     boot: impl NotifierBootFn<State>,
     id: impl IdFn,
@@ -675,7 +845,6 @@ pub fn tray<State, MenuState>(
 
     menu_boot: impl DBusMenuBootFn<MenuState>,
     about_to_show: impl AboutToShowFn<MenuState>,
-    status: impl StatusFn<MenuState>,
 ) -> Tray<impl StatusNotifierItem<State = State>, impl DBusMenuItem<State = MenuState>>
 where
     State: 'static + Send + Sync,
@@ -712,19 +881,17 @@ where
             self.title.title(state)
         }
     }
-    struct MenuInstance<MenuState, MenuBootFn, AboutToShowFn, StatusFn> {
+    struct MenuInstance<MenuState, MenuBootFn, AboutToShowFn> {
         boot: MenuBootFn,
         about_to_show: AboutToShowFn,
-        status: StatusFn,
         _state: PhantomData<MenuState>,
     }
 
-    impl<MenuState, MenuBootFn, AboutToShowFn, StatusFn> DBusMenuItem
-        for MenuInstance<MenuState, MenuBootFn, AboutToShowFn, StatusFn>
+    impl<MenuState, MenuBootFn, AboutToShowFn> DBusMenuItem
+        for MenuInstance<MenuState, MenuBootFn, AboutToShowFn>
     where
         MenuBootFn: self::DBusMenuBootFn<MenuState>,
         AboutToShowFn: self::AboutToShowFn<MenuState>,
-        StatusFn: self::StatusFn<MenuState>,
     {
         type State = MenuState;
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -732,9 +899,6 @@ where
         }
         fn boot(&self) -> Self::State {
             self.boot.boot()
-        }
-        fn status(&self, state: &Self::State) -> zbus::fdo::Result<String> {
-            self.status.status(state)
         }
     }
     Tray {
@@ -748,7 +912,6 @@ where
         menu_raw: MenuInstance {
             boot: menu_boot,
             about_to_show,
-            status,
             _state: PhantomData,
         },
     }

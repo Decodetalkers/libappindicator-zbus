@@ -55,7 +55,14 @@ pub struct MenuItem {
     pub item: MenuProperty,
     pub sub_menus: Vec<zvariant::OwnedValue>,
 }
-
+#[derive(Clone, PartialEq, Type, OwnedValue, Value, Debug, Default)]
+#[zvariant(signature = "s")]
+pub enum MenuStatus {
+    #[default]
+    Normal,
+    Notice,
+    Disabled,
+}
 impl MenuItem {
     fn new() -> Self {
         MenuItem {
@@ -99,7 +106,9 @@ pub trait DBusMenuItem {
         Ok((1, MenuItem::new()))
     }
 
-    fn status(&self, state: &Self::State) -> zbus::fdo::Result<String>;
+    fn status(&self, _state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
+        Ok(MenuStatus::Normal)
+    }
 
     #[allow(unused)]
     fn get_group_properties(
@@ -130,15 +139,15 @@ where
     }
 }
 
-pub trait StatusFn<State> {
-    fn status(&self, state: &State) -> zbus::fdo::Result<String>;
+pub trait MenuStatusFn<State> {
+    fn status(&self, state: &State) -> MenuStatus;
 }
 
-impl<T, State> StatusFn<State> for T
+impl<T, State> MenuStatusFn<State> for T
 where
-    T: Fn(&State) -> zbus::fdo::Result<String>,
+    T: Fn(&State) -> MenuStatus,
 {
-    fn status(&self, state: &State) -> zbus::fdo::Result<String> {
+    fn status(&self, state: &State) -> MenuStatus {
         self(state)
     }
 }
@@ -247,7 +256,7 @@ where
 
     /// Status property
     #[zbus(property)]
-    fn status(&self) -> zbus::fdo::Result<String> {
+    fn status(&self) -> zbus::fdo::Result<MenuStatus> {
         self.program.status(&self.state)
     }
 

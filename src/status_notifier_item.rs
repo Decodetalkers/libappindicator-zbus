@@ -42,6 +42,15 @@ struct ToolTip {
     description: String,
 }
 
+#[derive(Clone, PartialEq, Type, OwnedValue, Value, Debug, Default)]
+#[zvariant(signature = "s")]
+pub enum NotifierStatus {
+    #[default]
+    Active,
+    Passive,
+    NeedsAttention,
+}
+
 pub trait StatusNotifierItem {
     type State;
     fn boot(&self) -> Self::State;
@@ -76,6 +85,11 @@ pub trait StatusNotifierItem {
     }
 
     fn title(&self, state: &Self::State) -> zbus::fdo::Result<String>;
+
+    #[allow(unused)]
+    fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
+        Ok(NotifierStatus::Active)
+    }
 }
 
 pub trait NotifierBootFn<State> {
@@ -241,6 +255,19 @@ where
     }
 }
 
+pub trait NotifierStatusFn<State> {
+    fn status(&self, state: &State) -> NotifierStatus;
+}
+
+impl<State, T> NotifierStatusFn<State> for T
+where
+    T: Fn(&State) -> NotifierStatus,
+{
+    fn status(&self, state: &State) -> NotifierStatus {
+        self(state)
+    }
+}
+
 pub struct StatusNotifierInstance<P: StatusNotifierItem> {
     pub(crate) program: P,
     pub(crate) state: P::State,
@@ -321,8 +348,8 @@ where
 
     /// Status property
     #[zbus(property)]
-    fn status(&self) -> zbus::fdo::Result<String> {
-        Ok("Active".to_owned())
+    fn status(&self) -> zbus::fdo::Result<NotifierStatus> {
+        self.program.status(&self.state)
     }
 
     /// Title property
