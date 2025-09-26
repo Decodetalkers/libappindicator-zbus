@@ -5,7 +5,7 @@ use libappindicator_zbus::{
         ToggleState, ToggleType,
     },
 };
-use zbus::{fdo::Result, zvariant::OwnedValue};
+use zbus::fdo::Result;
 
 const IMAGE_DATA: &[u8] = include_bytes!("../misc/logo.png");
 

@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use zbus::{
     interface,
     object_server::SignalEmitter,
-    zvariant::{OwnedObjectPath, OwnedValue, Type, Value},
+    zvariant::{ObjectPath, OwnedValue, Type, Value},
 };
 
 #[derive(Clone, PartialEq, Type, OwnedValue, Value, Debug, Default)]
@@ -50,6 +50,8 @@ pub enum NotifierStatus {
     Passive,
     NeedsAttention,
 }
+
+const MENU_PATH: ObjectPath = ObjectPath::from_static_str_unchecked("/MenuBar");
 
 #[derive(
     Clone, Copy, PartialEq, Type, OwnedValue, Value, Debug, Default, Serialize, Deserialize,
@@ -586,8 +588,8 @@ where
 
     /// Menu property
     #[zbus(property)]
-    fn menu(&self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
-        Ok(OwnedObjectPath::try_from("/MenuBar").unwrap())
+    fn menu(&self) -> zbus::zvariant::OwnedObjectPath {
+        MENU_PATH.into()
     }
 
     /// ToolTip property
