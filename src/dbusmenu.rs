@@ -236,7 +236,7 @@ where
 
     /// GetProperty method
     fn get_property(&self, _id: i32, _name: String) -> zbus::fdo::Result<OwnedValue> {
-        Ok(OwnedValue::try_from(true).unwrap())
+        Ok(true.into())
     }
 
     /// Version property

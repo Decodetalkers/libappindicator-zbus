@@ -6,8 +6,8 @@ use crate::{
         GetLayoutFn, MenuItem, StatusFn,
     },
     status_notifier_item::{
-        ActivateFn, ContextMenuFn, IdFn, NotifierBootFn, ScrollFn, SecondaryActivateFn,
-        StatusNotifierInstance, StatusNotifierItem,
+        ActivateFn, ContextMenuFn, IconNameFn, IdFn, NotifierBootFn, ScrollFn, SecondaryActivateFn,
+        StatusNotifierInstance, StatusNotifierItem, TitleFn,
     },
     status_notifier_watcher::StatusNotifierWatcherProxy,
 };
@@ -259,6 +259,9 @@ where
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             (self.icon)(state)
         }
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.title(state)
+        }
         fn category(&self) -> zbus::fdo::Result<String> {
             self.program.category()
         }
@@ -310,6 +313,9 @@ where
             y: i32,
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
+        }
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.title(state)
         }
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_name(state)
@@ -369,6 +375,9 @@ where
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
         }
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.title(state)
+        }
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_name(state)
         }
@@ -417,6 +426,7 @@ where
         fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
             self.program.activate(state, x, y)
         }
+
         fn secondary_activate(
             &self,
             state: &mut Self::State,
@@ -427,6 +437,9 @@ where
         }
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_name(state)
+        }
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.title(state)
         }
         fn category(&self) -> zbus::fdo::Result<String> {
             self.program.category()
@@ -537,11 +550,13 @@ fn with_get_group_properties<M: DBusMenuItem>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn tray<State, MenuState>(
     boot: impl NotifierBootFn<State>,
     id: impl IdFn,
     activate: impl ActivateFn<State>,
-    icon_name: impl Fn(&State) -> zbus::fdo::Result<String>,
+    icon_name: impl IconNameFn<State>,
+    title: impl TitleFn<State>,
     category: &str,
 
     menu_boot: impl DBusMenuBootFn<MenuState>,
@@ -552,20 +567,22 @@ where
     State: 'static + Send + Sync,
 {
     use std::marker::PhantomData;
-    struct Instance<State, IdFn, IconFn, BootFn, ActivateFn> {
+    struct Instance<State, IdFn, IconFn, TitleFn, BootFn, ActivateFn> {
         boot: BootFn,
         id: IdFn,
         icon_name: IconFn,
+        title: TitleFn,
         category: String,
         activate: ActivateFn,
         _state: PhantomData<State>,
     }
-    impl<State, IdFn, IconFn, BootFn, ActivateFn> StatusNotifierItem
-        for Instance<State, IdFn, IconFn, BootFn, ActivateFn>
+    impl<State, IdFn, IconFn, TitleFn, BootFn, ActivateFn> StatusNotifierItem
+        for Instance<State, IdFn, IconFn, TitleFn, BootFn, ActivateFn>
     where
         BootFn: self::NotifierBootFn<State>,
         IdFn: self::IdFn,
-        IconFn: Fn(&State) -> zbus::fdo::Result<String>,
+        IconFn: self::IconNameFn<State>,
+        TitleFn: self::TitleFn<State>,
         ActivateFn: self::ActivateFn<State>,
     {
         type State = State;
@@ -573,7 +590,7 @@ where
             self.id.id()
         }
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
-            (self.icon_name)(state)
+            self.icon_name.icon_name(state)
         }
         fn category(&self) -> zbus::fdo::Result<String> {
             Ok(self.category.clone())
@@ -583,6 +600,9 @@ where
             self.boot.boot()
         }
 
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.title.title(state)
+        }
         fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
             self.activate.activate(state, x, y)
         }
@@ -617,6 +637,7 @@ where
             boot,
             id,
             icon_name,
+            title,
             category: category.to_owned(),
             activate,
             _state: PhantomData,

@@ -12,9 +12,7 @@ impl Base {
     fn boot() -> Self {
         Base
     }
-    fn id() -> String {
-        "Hello".to_owned()
-    }
+
     fn activate(&mut self, _x: i32, _y: i32) -> Result<()> {
         println!("active");
         Ok(())
@@ -28,9 +26,6 @@ impl Base {
     }
     fn secondary_activate(&mut self, _x: i32, _y: i32) -> Result<()> {
         Ok(())
-    }
-    fn icon_name(&self) -> Result<String> {
-        Ok("nheko".to_owned())
     }
 }
 
@@ -124,9 +119,10 @@ impl Menu {
 async fn main() {
     let connection = tray(
         Base::boot,
-        Base::id,
+        "hello",
         Base::activate,
-        Base::icon_name,
+        "nheko",
+        "fake_nheko",
         "SystemService",
         Menu::boot,
         Menu::about_to_show,

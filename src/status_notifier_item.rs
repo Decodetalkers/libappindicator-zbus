@@ -69,6 +69,8 @@ pub trait StatusNotifierItem {
     fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String>;
 
     fn category(&self) -> zbus::fdo::Result<String>;
+
+    fn title(&self, state: &Self::State) -> zbus::fdo::Result<String>;
 }
 
 pub trait NotifierBootFn<State> {
@@ -94,6 +96,18 @@ where
 {
     fn id(&self) -> String {
         self()
+    }
+}
+
+impl IdFn for &str {
+    fn id(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl IdFn for String {
+    fn id(&self) -> String {
+        self.clone()
     }
 }
 
@@ -144,6 +158,56 @@ where
 {
     fn context_menu(&self, state: &mut State, x: i32, y: i32) -> zbus::fdo::Result<()> {
         self(state, x, y)
+    }
+}
+
+pub trait TitleFn<State> {
+    fn title(&self, state: &State) -> zbus::fdo::Result<String>;
+}
+
+impl<State> TitleFn<State> for &str {
+    fn title(&self, _state: &State) -> zbus::fdo::Result<String> {
+        Ok(self.to_string())
+    }
+}
+
+impl<State> TitleFn<State> for String {
+    fn title(&self, _state: &State) -> zbus::fdo::Result<String> {
+        Ok(self.clone())
+    }
+}
+
+impl<State, T> TitleFn<State> for T
+where
+    T: Fn(&State) -> zbus::fdo::Result<String>,
+{
+    fn title(&self, state: &State) -> zbus::fdo::Result<String> {
+        self(state)
+    }
+}
+
+pub trait IconNameFn<State> {
+    fn icon_name(&self, state: &State) -> zbus::fdo::Result<String>;
+}
+
+impl<State> IconNameFn<State> for &str {
+    fn icon_name(&self, _state: &State) -> zbus::fdo::Result<String> {
+        Ok(self.to_string())
+    }
+}
+
+impl<State> IconNameFn<State> for String {
+    fn icon_name(&self, _state: &State) -> zbus::fdo::Result<String> {
+        Ok(self.clone())
+    }
+}
+
+impl<State, T> IconNameFn<State> for T
+where
+    T: Fn(&State) -> zbus::fdo::Result<String>,
+{
+    fn icon_name(&self, state: &State) -> zbus::fdo::Result<String> {
+        self(state)
     }
 }
 
@@ -268,8 +332,6 @@ pub trait StatusNotifierItemBackend {
     /// IconThemePath property
     #[zbus(property)]
     fn icon_theme_path(&self) -> zbus::Result<String>;
-
-
 
     /// OverlayIconName property
     #[zbus(property)]
