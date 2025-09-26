@@ -41,6 +41,7 @@ pub struct MenuProperty {
 impl MenuProperty {
     pub fn submenu() -> Self {
         MenuProperty {
+            label: Some("root".to_owned()),
             children_display: Some("submenu".to_owned()),
             ..Default::default()
         }
@@ -62,6 +63,11 @@ impl MenuItem {
             item: MenuProperty::submenu(),
             sub_menus: vec![],
         }
+    }
+
+    pub fn push_submenu(mut self, menu: MenuItem) -> Self {
+        self.sub_menus.push(OwnedValue::try_from(menu).unwrap());
+        self
     }
 }
 
@@ -94,6 +100,16 @@ pub trait DBusMenuItem {
     }
 
     fn status(&self, state: &Self::State) -> zbus::fdo::Result<String>;
+
+    #[allow(unused)]
+    fn get_group_properties(
+        &self,
+        state: &mut Self::State,
+        ids: Vec<i32>,
+        property_names: Vec<String>,
+    ) -> zbus::fdo::Result<Vec<PropertyItem>> {
+        Ok(vec![])
+    }
 }
 
 pub struct DBusMenuInstance<Menu: DBusMenuItem> {
@@ -164,6 +180,29 @@ where
     }
 }
 
+pub trait GetGroupPropertiesFn<State> {
+    fn get_group_properties(
+        &self,
+        state: &mut State,
+        ids: Vec<i32>,
+        property_names: Vec<String>,
+    ) -> zbus::fdo::Result<Vec<PropertyItem>>;
+}
+
+impl<T, State> GetGroupPropertiesFn<State> for T
+where
+    T: Fn(&mut State, Vec<i32>, Vec<String>) -> zbus::fdo::Result<Vec<PropertyItem>>,
+{
+    fn get_group_properties(
+        &self,
+        state: &mut State,
+        ids: Vec<i32>,
+        property_names: Vec<String>,
+    ) -> zbus::fdo::Result<Vec<PropertyItem>> {
+        self(state, ids, property_names)
+    }
+}
+
 #[interface(name = "com.canonical.dbusmenu")]
 impl<Menu: DBusMenuItem> DBusMenuInstance<Menu>
 where
@@ -187,28 +226,12 @@ where
 
     /// GetGroupProperties method
     fn get_group_properties(
-        &self,
-        _ids: Vec<i32>,
-        _property_names: Vec<String>,
+        &mut self,
+        ids: Vec<i32>,
+        property_names: Vec<String>,
     ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        Ok(vec![
-            PropertyItem {
-                id: 2,
-                item: MenuProperty {
-                    label: Some("Hello".to_owned()),
-                    icon_name: Some("input-method".to_owned()),
-                    ..Default::default()
-                },
-            },
-            PropertyItem {
-                id: 3,
-                item: MenuProperty {
-                    label: Some("Hello".to_owned()),
-                    icon_name: Some("input-method".to_owned()),
-                    ..Default::default()
-                },
-            },
-        ])
+        self.program
+            .get_group_properties(&mut self.state, ids, property_names)
     }
 
     /// GetProperty method
@@ -271,9 +294,6 @@ where
 
 #[proxy(interface = "com.canonical.dbusmenu", default_path = "/MenuBar")]
 pub trait dbusmenu {
-    /// AboutToShow method
-    fn about_to_show(&self, id: i32) -> zbus::Result<bool>;
-
     /// AboutToShowGroup method
     fn about_to_show_group(&self, ids: &[i32]) -> zbus::Result<(Vec<i32>, Vec<i32>)>;
 
@@ -286,10 +306,6 @@ pub trait dbusmenu {
     /// IconThemePath property
     #[zbus(property)]
     fn icon_theme_path(&self) -> zbus::Result<Vec<String>>;
-
-    /// Status property
-    #[zbus(property)]
-    fn status(&self) -> zbus::Result<String>;
 
     /// TextDirection property
     #[zbus(property)]

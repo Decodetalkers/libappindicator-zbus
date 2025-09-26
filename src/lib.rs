@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 
 use crate::{
     dbusmenu::{
-        AboutToShowFn, DBusMenuBootFn, DBusMenuInstance, DBusMenuItem, GetLayoutFn, MenuItem,
-        StatusFn,
+        AboutToShowFn, DBusMenuBootFn, DBusMenuInstance, DBusMenuItem, GetGroupPropertiesFn,
+        GetLayoutFn, MenuItem, StatusFn,
     },
     status_notifier_item::{
         ActivateFn, ContextMenuFn, IdFn, NotifierBootFn, ScrollFn, SecondaryActivateFn,
@@ -35,9 +35,9 @@ where
     M::State: 'static + Send + Sync,
     M: Send + Sync + 'static,
 {
-    pub async fn update_notify_state<F>(&self, f: F) -> zbus::Result<()>
+    pub async fn update_notify_state<F, R>(&self, f: F) -> zbus::Result<R>
     where
-        F: Fn(&mut P::State),
+        F: Fn(&mut P::State) -> R,
     {
         let iface_ref = self
             .conn
@@ -45,12 +45,11 @@ where
             .interface::<_, StatusNotifierInstance<P>>("/StatusNotifierItem")
             .await?;
         let mut data = iface_ref.get_mut().await;
-        f(&mut data.state);
-        Ok(())
+        Ok(f(&mut data.state))
     }
-    pub async fn update_menu_state<F>(&self, f: F) -> zbus::Result<()>
+    pub async fn update_menu_state<F, R>(&self, f: F) -> zbus::Result<R>
     where
-        F: Fn(&mut M::State),
+        F: Fn(&mut M::State) -> R,
     {
         let iface_ref = self
             .conn
@@ -58,13 +57,12 @@ where
             .interface::<_, DBusMenuInstance<M>>("/MenuBar")
             .await?;
         let mut data = iface_ref.get_mut().await;
-        f(&mut data.state);
-        Ok(())
+        Ok(f(&mut data.state))
     }
 
-    pub async fn update_state<F>(&self, f: F) -> zbus::Result<()>
+    pub async fn update_state<F, R>(&self, f: F) -> zbus::Result<R>
     where
-        F: Fn(&mut P::State, &mut M::State),
+        F: Fn(&mut P::State, &mut M::State) -> R,
     {
         let iface_ref = self
             .conn
@@ -78,8 +76,7 @@ where
             .await?;
         let mut data = iface_ref.get_mut().await;
         let mut menu_data = menu_iface_ref.get_mut().await;
-        f(&mut data.state, &mut menu_data.state);
-        Ok(())
+        Ok(f(&mut data.state, &mut menu_data.state))
     }
     pub fn unique_name(&self) -> Option<&zbus::names::OwnedUniqueName> {
         self.conn.unique_name()
@@ -202,6 +199,15 @@ where
         Tray {
             notifier_raw: self.notifier_raw,
             menu_raw: with_layout(self.menu_raw, f),
+        }
+    }
+    pub fn with_get_group_properties(
+        self,
+        f: impl GetGroupPropertiesFn<M::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: self.notifier_raw,
+            menu_raw: with_get_group_properties(self.menu_raw, f),
         }
     }
 }
@@ -465,10 +471,69 @@ fn with_layout<M: DBusMenuItem>(
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.status(state)
         }
+        fn get_group_properties(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+            property_names: Vec<String>,
+        ) -> zbus::fdo::Result<Vec<dbusmenu::PropertyItem>> {
+            self.program
+                .get_group_properties(state, ids, property_names)
+        }
     }
     WithLayout {
         program,
         get_layout,
+    }
+}
+
+fn with_get_group_properties<M: DBusMenuItem>(
+    program: M,
+    get_group_properties: impl GetGroupPropertiesFn<M::State>,
+) -> impl DBusMenuItem<State = M::State> {
+    struct WithGetGroupProperties<M, GetGroupProperties> {
+        program: M,
+        get_group_properties: GetGroupProperties,
+    }
+
+    impl<M: DBusMenuItem, GetGroupProperties> DBusMenuItem
+        for WithGetGroupProperties<M, GetGroupProperties>
+    where
+        GetGroupProperties: self::GetGroupPropertiesFn<M::State>,
+    {
+        type State = M::State;
+        fn get_layout(
+            &self,
+            state: &mut Self::State,
+            parent_id: i32,
+            recursion_depth: i32,
+            property_names: Vec<String>,
+        ) -> zbus::fdo::Result<(u32, MenuItem)> {
+            self.program
+                .get_layout(state, parent_id, recursion_depth, property_names)
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
+            self.program.about_to_show(state, id)
+        }
+        fn status(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.status(state)
+        }
+        fn get_group_properties(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+            property_names: Vec<String>,
+        ) -> zbus::fdo::Result<Vec<dbusmenu::PropertyItem>> {
+            self.get_group_properties
+                .get_group_properties(state, ids, property_names)
+        }
+    }
+    WithGetGroupProperties {
+        program,
+        get_group_properties,
     }
 }
 

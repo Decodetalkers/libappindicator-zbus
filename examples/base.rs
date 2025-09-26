@@ -1,5 +1,7 @@
+use std::time::Duration;
+
 use status_notifier::{
-    dbusmenu::{MenuItem, MenuProperty},
+    dbusmenu::{MenuItem, MenuProperty, PropertyItem},
     tray,
 };
 use zbus::{fdo::Result, zvariant::OwnedValue};
@@ -32,11 +34,13 @@ impl Base {
     }
 }
 
-struct Menu;
+struct Menu {
+    need_update: bool,
+}
 
 impl Menu {
     fn boot() -> Self {
-        Menu
+        Menu { need_update: false }
     }
     fn about_to_show(&mut self, id: i32) -> Result<bool> {
         println!("{id}");
@@ -52,7 +56,7 @@ impl Menu {
         Ok((
             1,
             MenuItem {
-                id: 1,
+                id: 0,
                 item: MenuProperty::submenu(),
                 sub_menus: vec![
                     OwnedValue::try_from(MenuItem {
@@ -60,6 +64,7 @@ impl Menu {
                         item: MenuProperty {
                             label: Some("Hello".to_owned()),
                             icon_name: Some("input-method".to_owned()),
+                            enabled: Some(true),
                             ..Default::default()
                         },
                         sub_menus: vec![],
@@ -70,6 +75,7 @@ impl Menu {
                         item: MenuProperty {
                             label: Some("Hello".to_owned()),
                             icon_name: Some("input-method".to_owned()),
+                            enabled: Some(true),
                             ..Default::default()
                         },
                         sub_menus: vec![],
@@ -79,6 +85,34 @@ impl Menu {
             },
         ))
     }
+
+    fn get_group_properties(
+        &mut self,
+        ids: Vec<i32>,
+        property_names: Vec<String>,
+    ) -> zbus::fdo::Result<Vec<PropertyItem>> {
+        println!("{ids:?},{property_names:?}");
+        self.need_update = true;
+        Ok(vec![
+            PropertyItem {
+                id: 2,
+                item: MenuProperty {
+                    label: Some("Hello".to_owned()),
+                    icon_name: Some("input-method".to_owned()),
+                    ..Default::default()
+                },
+            },
+            PropertyItem {
+                id: 3,
+                item: MenuProperty {
+                    label: Some("Hello".to_owned()),
+                    icon_name: Some("input-method".to_owned()),
+                    ..Default::default()
+                },
+            },
+        ])
+    }
+
     fn status(&self) -> Result<String> {
         Ok("normal".to_string())
     }
@@ -100,13 +134,33 @@ async fn main() {
     .with_scroll(Base::scroll)
     .with_secondary_activate(Base::secondary_activate)
     .with_layout(Menu::get_layout)
+    .with_get_group_properties(Menu::get_group_properties)
     .run()
     .await
     .unwrap();
 
     println!("{:?}", connection.unique_name());
 
-    let _ = connection.notify_layout_changed(0, 0).await;
+    let mut revision = 0;
+    let _ = connection.notify_layout_changed(revision, 0).await;
 
-    std::future::pending::<()>().await;
+    loop {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let need_update = connection
+            .update_menu_state(|menu| {
+                let need_update = menu.need_update;
+                if need_update {
+                    menu.need_update = false;
+                }
+                need_update
+            })
+            .await
+            .unwrap();
+        if need_update {
+            revision += 1;
+            let _ = connection.notify_layout_changed(revision, 0).await;
+        }
+    }
+
+    //std::future::pending::<()>().await;
 }
