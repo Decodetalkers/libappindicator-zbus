@@ -28,7 +28,7 @@ pub mod event_types;
 
 pub use event_types::*;
 
-#[derive(Type, Debug, Serialize, Deserialize, Default, OwnedValue, Value)]
+#[derive(Type, Debug, Serialize, Deserialize, Default, OwnedValue, Value, Clone)]
 /// Specified options for a [`Screencast::create_session`] request.
 #[zvariant(signature = "dict")]
 pub struct MenuProperty {
@@ -70,11 +70,11 @@ impl MenuProperty {
     }
 }
 
-#[derive(Type, Debug, Default, Serialize, Deserialize, OwnedValue, Value)]
+#[derive(Type, Debug, Serialize, Deserialize, OwnedValue, Value, Clone)]
 #[zvariant(signature = "(ia{sv}av)")]
 pub struct MenuItem {
     pub id: i32,
-    pub item: MenuProperty,
+    pub property: MenuProperty,
     pub sub_menus: Vec<zvariant::OwnedValue>,
 }
 
@@ -86,18 +86,62 @@ pub enum MenuStatus {
     Notice,
     Disabled,
 }
-impl MenuItem {
-    fn new() -> Self {
+
+impl Default for MenuItem {
+    fn default() -> Self {
         MenuItem {
             id: 1,
-            item: MenuProperty::submenu(),
+            property: MenuProperty::submenu(),
             sub_menus: vec![],
         }
     }
+}
 
-    pub fn push_submenu(mut self, menu: MenuItem) -> Self {
+impl MenuItem {
+    pub fn new(id: i32, property: MenuProperty) -> Self {
+        MenuItem {
+            id,
+            property,
+            sub_menus: vec![],
+        }
+    }
+    pub fn push_sub_menu(mut self, menu: MenuItem) -> Self {
         self.sub_menus.push(OwnedValue::try_from(menu).unwrap());
         self
+    }
+
+    pub fn get_property(&self, id: i32) -> Option<PropertyItem> {
+        if self.id == id {
+            return Some(PropertyItem {
+                id,
+                item: self.property.clone(),
+            });
+        }
+        let sub_menus: Vec<MenuItem> = self
+            .sub_menus
+            .iter()
+            .map(|submenu| submenu.clone().try_into().unwrap())
+            .collect();
+
+        for sub_menu in sub_menus {
+            let property = sub_menu.get_property(id);
+            if property.is_some() {
+                return property;
+            }
+        }
+
+        None
+    }
+
+    pub fn get_property_groups(&self, ids: Vec<i32>) -> Vec<PropertyItem> {
+        let mut output = vec![];
+        for id in ids {
+            if let Some(property) = self.get_property(id) {
+                output.push(property);
+            }
+        }
+
+        output
     }
 }
 
@@ -138,7 +182,7 @@ pub trait DBusMenuItem {
         recursion_depth: i32,
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<(u32, MenuItem)> {
-        Ok((1, MenuItem::new()))
+        Ok((1, MenuItem::default()))
     }
 
     fn status(&self, _state: &Self::State) -> zbus::fdo::Result<MenuStatus> {

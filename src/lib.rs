@@ -11,5 +11,5 @@ pub mod utils {
         ToggleType,
     };
 
-    pub use crate::status_notifier_item::{IconPixmap, NotifierStatus, ToolTip};
+    pub use crate::status_notifier_item::{Category, IconPixmap, NotifierStatus, ToolTip};
 }

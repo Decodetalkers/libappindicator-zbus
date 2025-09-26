@@ -51,6 +51,30 @@ pub enum NotifierStatus {
     NeedsAttention,
 }
 
+#[derive(
+    Clone, Copy, PartialEq, Type, OwnedValue, Value, Debug, Default, Serialize, Deserialize,
+)]
+#[zvariant(signature = "s")]
+pub enum Category {
+    /// The item describes the status of a generic application, for instance
+    /// the current state of a media player. In the case where the category of
+    /// the item can not be known, such as when the item is being proxied from
+    /// another incompatible or emulated system, ApplicationStatus can be used
+    /// a sensible default fallback.
+    #[default]
+    ApplicationStatus,
+    /// The item describes the status of communication oriented applications,
+    /// like an instant messenger or an email client.
+    Communications,
+    /// The item describes services of the system not seen as a stand alone
+    /// application by the user, such as an indicator for the activity of a disk
+    /// indexing service.
+    SystemServices,
+    /// The item describes the state and control of a particular hardware,
+    /// such as an indicator of the battery charge or sound card volume control.
+    Hardware,
+}
+
 pub trait StatusNotifierItem {
     type State;
     fn boot(&self) -> Self::State;
@@ -124,8 +148,8 @@ pub trait StatusNotifierItem {
         Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
     }
 
-    fn category(&self) -> zbus::fdo::Result<String> {
-        Ok("SystemService".to_string())
+    fn category(&self) -> Category {
+        Category::SystemServices
     }
 
     fn title(&self, state: &Self::State) -> zbus::fdo::Result<String>;
@@ -185,27 +209,21 @@ impl IdFn for String {
 }
 
 pub trait CategoryFn {
-    fn category(&self) -> String;
+    fn category(&self) -> Category;
 }
 
 impl<T> CategoryFn for T
 where
-    T: Fn() -> String,
+    T: Fn() -> Category,
 {
-    fn category(&self) -> String {
+    fn category(&self) -> Category {
         self()
     }
 }
 
-impl CategoryFn for &str {
-    fn category(&self) -> String {
-        self.to_string()
-    }
-}
-
-impl CategoryFn for String {
-    fn category(&self) -> String {
-        self.clone()
+impl CategoryFn for Category {
+    fn category(&self) -> Category {
+        *self
     }
 }
 
@@ -628,7 +646,7 @@ where
 
     /// Category property
     #[zbus(property)]
-    fn category(&self) -> zbus::fdo::Result<String> {
+    fn category(&self) -> Category {
         self.program.category()
     }
 

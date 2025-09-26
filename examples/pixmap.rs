@@ -1,8 +1,8 @@
 use libappindicator_zbus::{
     tray,
     utils::{
-        EventUpdate, IconPixmap, MenuItem, MenuProperty, MenuStatus, PropertyItem, ToggleState,
-        ToggleType,
+        Category, EventUpdate, IconPixmap, MenuItem, MenuProperty, MenuStatus, PropertyItem,
+        ToggleState, ToggleType,
     },
 };
 use zbus::{fdo::Result, zvariant::OwnedValue};
@@ -43,13 +43,34 @@ impl Base {
     }
 }
 
-struct Menu;
-
+struct Menu {
+    menu: MenuItem,
+}
 impl Menu {
     fn boot() -> Self {
-        Menu
+        let menu = MenuItem::new(0, MenuProperty::submenu())
+            .push_sub_menu(MenuItem::new(
+                1,
+                MenuProperty {
+                    label: Some("Hello".to_owned()),
+                    icon_name: Some("input-method".to_owned()),
+                    enabled: Some(true),
+                    toggle_type: Some(ToggleType::Radio),
+                    toggle_state: Some(ToggleState::UnSelected),
+                    ..Default::default()
+                },
+            ))
+            .push_sub_menu(MenuItem::new(
+                2,
+                MenuProperty {
+                    label: Some("World".to_owned()),
+                    icon_name: Some("fcitx_pinyin".to_owned()),
+                    enabled: Some(true),
+                    ..Default::default()
+                },
+            ));
+        Menu { menu }
     }
-
     fn about_to_show(&mut self, id: i32) -> Result<bool> {
         println!("about {id}");
         Ok(true)
@@ -61,69 +82,15 @@ impl Menu {
         _recursion_depth: i32,
         _property_name: Vec<String>,
     ) -> Result<(u32, MenuItem)> {
-        Ok((
-            1,
-            MenuItem {
-                id: 0,
-                item: MenuProperty::submenu(),
-                sub_menus: vec![
-                    OwnedValue::try_from(MenuItem {
-                        id: 1,
-                        item: MenuProperty {
-                            label: Some("Hello".to_owned()),
-                            icon_name: Some("input-method".to_owned()),
-                            enabled: Some(true),
-                            toggle_type: Some(ToggleType::Checkmark),
-                            toggle_state: Some(ToggleState::UnSelected),
-                            ..Default::default()
-                        },
-                        sub_menus: vec![],
-                    })
-                    .unwrap(),
-                    OwnedValue::try_from(MenuItem {
-                        id: 2,
-                        item: MenuProperty {
-                            label: Some("World".to_owned()),
-                            icon_name: Some("fcitx_pinyin".to_owned()),
-                            enabled: Some(true),
-                            ..Default::default()
-                        },
-                        sub_menus: vec![],
-                    })
-                    .unwrap(),
-                ],
-            },
-        ))
+        Ok((1, self.menu.clone()))
     }
 
     fn get_group_properties(
         &mut self,
         ids: Vec<i32>,
-        property_names: Vec<String>,
+        _property_names: Vec<String>,
     ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        println!("{ids:?},{property_names:?}");
-        Ok(vec![
-            PropertyItem {
-                id: 1,
-                item: MenuProperty {
-                    label: Some("Hello".to_owned()),
-                    icon_name: Some("input-method".to_owned()),
-                    enabled: Some(true),
-                    toggle_type: Some(ToggleType::Checkmark),
-                    toggle_state: Some(ToggleState::UnSelected),
-                    ..Default::default()
-                },
-            },
-            PropertyItem {
-                id: 2,
-                item: MenuProperty {
-                    label: Some("World".to_owned()),
-                    icon_name: Some("fcitx_pinyin".to_owned()),
-                    enabled: Some(true),
-                    ..Default::default()
-                },
-            },
-        ])
+        Ok(self.menu.get_property_groups(ids))
     }
 
     fn status(&self) -> MenuStatus {
@@ -148,7 +115,7 @@ async fn main() {
     .with_item_is_menu(true)
     .with_icon_pixmap(Base::icon_pixmap)
     .with_activate(Base::activate)
-    .with_category("ApplicationStatus")
+    .with_category(Category::ApplicationStatus)
     .with_context_menu(Base::context_menu)
     .with_scroll(Base::scroll)
     .with_secondary_activate(Base::secondary_activate)

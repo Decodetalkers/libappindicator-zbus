@@ -14,7 +14,9 @@ pub enum ToggleType {
     None,
 }
 
-#[derive(Deserialize_repr, Serialize_repr, Type, Debug, OwnedValue, Value, Default)]
+#[derive(
+    Deserialize_repr, Serialize_repr, Type, Debug, OwnedValue, Value, Default, Clone, Copy,
+)]
 #[repr(i32)]
 pub enum ToggleState {
     #[default]

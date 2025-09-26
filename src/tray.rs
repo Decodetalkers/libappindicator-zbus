@@ -13,7 +13,7 @@ use crate::{
         ToolTipFn, WindowIdFn,
     },
     status_notifier_watcher::StatusNotifierWatcherProxy,
-    utils::{IconPixmap, TextDirection, ToolTip},
+    utils::{Category, IconPixmap, TextDirection, ToolTip},
 };
 use std::marker::PhantomData;
 
@@ -474,7 +474,7 @@ fn with_item_is_menu<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -561,7 +561,7 @@ fn with_tool_tip<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -648,7 +648,7 @@ fn with_tray_icon_theme_path<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -739,7 +739,7 @@ fn with_icon_name<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -829,7 +829,7 @@ fn with_icon_pixmap<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -922,7 +922,7 @@ fn with_attention_icon_name<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -1011,7 +1011,7 @@ fn with_attention_icon_pixmap<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -1101,7 +1101,7 @@ fn with_attention_movie_name<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -1193,7 +1193,7 @@ fn with_overlay_icon_name<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -1282,7 +1282,7 @@ fn with_overlay_icon_pixmap<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -1370,7 +1370,7 @@ fn with_context_menu<P: StatusNotifierItem>(
         fn overlay_icon_pixmap(&self, state: &Self::State) -> zbus::fdo::Result<Vec<IconPixmap>> {
             self.program.overlay_icon_pixmap(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -1461,7 +1461,7 @@ fn with_scroll<P: StatusNotifierItem>(
         fn overlay_icon_pixmap(&self, state: &Self::State) -> zbus::fdo::Result<Vec<IconPixmap>> {
             self.program.overlay_icon_pixmap(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -1551,8 +1551,8 @@ fn with_category<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
-            Ok(self.category.category())
+        fn category(&self) -> Category {
+            self.category.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
             self.program.status(state)
@@ -1640,7 +1640,7 @@ fn with_activate<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -1730,7 +1730,7 @@ fn with_secondary_activate<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -1822,7 +1822,7 @@ fn with_tray_status<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
@@ -1910,7 +1910,7 @@ fn with_window_id<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
-        fn category(&self) -> zbus::fdo::Result<String> {
+        fn category(&self) -> Category {
             self.program.category()
         }
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
