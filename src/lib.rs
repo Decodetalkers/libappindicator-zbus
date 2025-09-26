@@ -8,8 +8,9 @@ use crate::{
     },
     status_notifier_item::{
         ActivateFn, AttentionIconNameFn, AttentionIconPixmapFn, CategoryFn, ContextMenuFn,
-        IconNameFn, IconPixmapFn, IdFn, ItemIsMenuFn, NotifierBootFn, NotifierStatusFn, ScrollFn,
-        SecondaryActivateFn, StatusNotifierInstance, StatusNotifierItem, TitleFn,
+        IconNameFn, IconPixmapFn, IdFn, ItemIsMenuFn, NotifierBootFn, NotifierStatusFn,
+        OverlayIconNameFn, ScrollFn, SecondaryActivateFn, StatusNotifierInstance,
+        StatusNotifierItem, TitleFn,
     },
     status_notifier_watcher::StatusNotifierWatcherProxy,
 };
@@ -190,7 +191,15 @@ where
             menu_raw: self.menu_raw,
         }
     }
-
+    pub fn with_overlay_icon_name(
+        self,
+        f: impl OverlayIconNameFn<P::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: with_overlay_icon_name(self.notifier_raw, f),
+            menu_raw: self.menu_raw,
+        }
+    }
     pub fn with_item_is_menu(
         self,
         f: impl ItemIsMenuFn<P::State>,
@@ -411,6 +420,9 @@ fn with_item_is_menu<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
         }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
+        }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
@@ -429,6 +441,175 @@ fn with_item_is_menu<P: StatusNotifierItem>(
     }
     WithItemIsMenu { program, is_menu }
 }
+
+fn with_icon_name<P: StatusNotifierItem>(
+    program: P,
+    icon: impl IconNameFn<P::State>,
+) -> impl StatusNotifierItem<State = P::State> {
+    struct WithIconName<P, F> {
+        program: P,
+        icon: F,
+    }
+    impl<P: StatusNotifierItem, F> StatusNotifierItem for WithIconName<P, F>
+    where
+        F: IconNameFn<P::State>,
+    {
+        type State = P::State;
+
+        fn id(&self) -> String {
+            self.program.id()
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn scroll(
+            &self,
+            state: &mut Self::State,
+            delta: i32,
+            orientation: &str,
+        ) -> zbus::fdo::Result<()> {
+            self.program.scroll(state, delta, orientation)
+        }
+        fn context_menu(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.context_menu(state, x, y)
+        }
+        fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.activate(state, x, y)
+        }
+        fn secondary_activate(
+            &self,
+            state: &mut Self::State,
+            x: i32,
+            y: i32,
+        ) -> zbus::fdo::Result<()> {
+            self.program.secondary_activate(state, x, y)
+        }
+        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.icon.icon_name(state)
+        }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.icon_pixmap(state)
+        }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
+        }
+        fn attention_icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.attention_icon_pixmap(state)
+        }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
+        }
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.title(state)
+        }
+        fn category(&self) -> zbus::fdo::Result<String> {
+            self.program.category()
+        }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
+        }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
+        }
+    }
+    WithIconName { program, icon }
+}
+
+fn with_icon_pixmap<P: StatusNotifierItem>(
+    program: P,
+    icon_pixmap: impl IconPixmapFn<P::State>,
+) -> impl StatusNotifierItem<State = P::State> {
+    struct WithIconPixmap<P, IconPixmapFn> {
+        program: P,
+        icon_pixmap: IconPixmapFn,
+    }
+    impl<P: StatusNotifierItem, IconPixmapFn> StatusNotifierItem for WithIconPixmap<P, IconPixmapFn>
+    where
+        IconPixmapFn: self::IconPixmapFn<P::State>,
+    {
+        type State = P::State;
+
+        fn id(&self) -> String {
+            self.program.id()
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn scroll(
+            &self,
+            state: &mut Self::State,
+            delta: i32,
+            orientation: &str,
+        ) -> zbus::fdo::Result<()> {
+            self.program.scroll(state, delta, orientation)
+        }
+        fn context_menu(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.context_menu(state, x, y)
+        }
+        fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.activate(state, x, y)
+        }
+
+        fn secondary_activate(
+            &self,
+            state: &mut Self::State,
+            x: i32,
+            y: i32,
+        ) -> zbus::fdo::Result<()> {
+            self.program.secondary_activate(state, x, y)
+        }
+        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.icon_name(state)
+        }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.icon_pixmap.icon_pixmap(state)
+        }
+        fn attention_icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.attention_icon_pixmap(state)
+        }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
+        }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
+        }
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.title(state)
+        }
+        fn category(&self) -> zbus::fdo::Result<String> {
+            self.program.category()
+        }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
+        }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
+        }
+    }
+    WithIconPixmap {
+        program,
+        icon_pixmap,
+    }
+}
+
 fn with_attention_icon_name<P: StatusNotifierItem>(
     program: P,
     icon: impl AttentionIconNameFn<P::State>,
@@ -489,6 +670,9 @@ fn with_attention_icon_name<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
+        }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
         }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
@@ -568,7 +752,11 @@ fn with_attention_icon_pixmap<P: StatusNotifierItem>(
             &self,
             state: &Self::State,
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
-            self.pixmaps.icon_pixmap(state)
+            self.pixmaps.attention_icon_pixmap(state)
+        }
+
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
         }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
@@ -589,17 +777,17 @@ fn with_attention_icon_pixmap<P: StatusNotifierItem>(
     WithAttentionPixmap { program, pixmaps }
 }
 
-fn with_icon_name<P: StatusNotifierItem>(
+fn with_overlay_icon_name<P: StatusNotifierItem>(
     program: P,
-    icon: impl IconNameFn<P::State>,
+    icon: impl OverlayIconNameFn<P::State>,
 ) -> impl StatusNotifierItem<State = P::State> {
-    struct WithIconName<P, F> {
+    struct WithOverlayIconName<P, F> {
         program: P,
         icon: F,
     }
-    impl<P: StatusNotifierItem, F> StatusNotifierItem for WithIconName<P, F>
+    impl<P: StatusNotifierItem, F> StatusNotifierItem for WithOverlayIconName<P, F>
     where
-        F: IconNameFn<P::State>,
+        F: OverlayIconNameFn<P::State>,
     {
         type State = P::State;
 
@@ -632,7 +820,7 @@ fn with_icon_name<P: StatusNotifierItem>(
             self.program.secondary_activate(state, x, y)
         }
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
-            self.icon.icon_name(state)
+            self.program.icon_name(state)
         }
         fn icon_pixmap(
             &self,
@@ -643,11 +831,15 @@ fn with_icon_name<P: StatusNotifierItem>(
         fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.attention_icon_name(state)
         }
+
         fn attention_icon_pixmap(
             &self,
             state: &Self::State,
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
+        }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.icon.overlay_icon_name(state)
         }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
@@ -665,7 +857,7 @@ fn with_icon_name<P: StatusNotifierItem>(
             self.program.item_is_menu(state)
         }
     }
-    WithIconName { program, icon }
+    WithOverlayIconName { program, icon }
 }
 
 fn with_context_menu<P: StatusNotifierItem>(
@@ -730,6 +922,9 @@ fn with_context_menu<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
+        }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
         }
         fn category(&self) -> zbus::fdo::Result<String> {
             self.program.category()
@@ -813,6 +1008,9 @@ fn with_scroll<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
         }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
+        }
         fn category(&self) -> zbus::fdo::Result<String> {
             self.program.category()
         }
@@ -890,6 +1088,9 @@ fn with_category<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
+        }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
         }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
@@ -971,6 +1172,9 @@ fn with_activate<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
         }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
+        }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
@@ -1051,6 +1255,9 @@ fn with_secondary_activate<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
+        }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
         }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
@@ -1135,6 +1342,9 @@ fn with_tray_status<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
         }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
+        }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
@@ -1152,89 +1362,6 @@ fn with_tray_status<P: StatusNotifierItem>(
         }
     }
     WithStatus { program, status }
-}
-
-fn with_icon_pixmap<P: StatusNotifierItem>(
-    program: P,
-    icon_pixmap: impl IconPixmapFn<P::State>,
-) -> impl StatusNotifierItem<State = P::State> {
-    struct WithIconPixmap<P, IconPixmapFn> {
-        program: P,
-        icon_pixmap: IconPixmapFn,
-    }
-    impl<P: StatusNotifierItem, IconPixmapFn> StatusNotifierItem for WithIconPixmap<P, IconPixmapFn>
-    where
-        IconPixmapFn: self::IconPixmapFn<P::State>,
-    {
-        type State = P::State;
-
-        fn id(&self) -> String {
-            self.program.id()
-        }
-        fn boot(&self) -> Self::State {
-            self.program.boot()
-        }
-        fn scroll(
-            &self,
-            state: &mut Self::State,
-            delta: i32,
-            orientation: &str,
-        ) -> zbus::fdo::Result<()> {
-            self.program.scroll(state, delta, orientation)
-        }
-        fn context_menu(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
-            self.program.context_menu(state, x, y)
-        }
-        fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
-            self.program.activate(state, x, y)
-        }
-
-        fn secondary_activate(
-            &self,
-            state: &mut Self::State,
-            x: i32,
-            y: i32,
-        ) -> zbus::fdo::Result<()> {
-            self.program.secondary_activate(state, x, y)
-        }
-        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
-            self.program.icon_name(state)
-        }
-        fn icon_pixmap(
-            &self,
-            state: &Self::State,
-        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
-            self.icon_pixmap.icon_pixmap(state)
-        }
-        fn attention_icon_pixmap(
-            &self,
-            state: &Self::State,
-        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
-            self.program.attention_icon_pixmap(state)
-        }
-        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
-            self.program.attention_icon_name(state)
-        }
-        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
-            self.program.title(state)
-        }
-        fn category(&self) -> zbus::fdo::Result<String> {
-            self.program.category()
-        }
-        fn status(
-            &self,
-            state: &Self::State,
-        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
-            self.program.status(state)
-        }
-        fn item_is_menu(&self, state: &Self::State) -> bool {
-            self.program.item_is_menu(state)
-        }
-    }
-    WithIconPixmap {
-        program,
-        icon_pixmap,
-    }
 }
 
 // NOTE: this part is for menu

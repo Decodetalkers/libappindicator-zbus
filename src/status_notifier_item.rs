@@ -95,6 +95,10 @@ pub trait StatusNotifierItem {
         Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
     }
 
+    #[allow(unused)]
+    fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+        Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
+    }
     //#[allow(unused)]
     //fn overlay_icon_pixmap(&self, state: &Self::State) -> zbus::fdo::Result<Vec<IconPixmap>> {
     //    Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
@@ -324,14 +328,38 @@ where
 }
 
 pub trait AttentionIconPixmapFn<State> {
-    fn icon_pixmap(&self, state: &State) -> zbus::fdo::Result<Vec<IconPixmap>>;
+    fn attention_icon_pixmap(&self, state: &State) -> zbus::fdo::Result<Vec<IconPixmap>>;
 }
 
 impl<State, T> AttentionIconPixmapFn<State> for T
 where
     T: Fn(&State) -> zbus::fdo::Result<Vec<IconPixmap>>,
 {
-    fn icon_pixmap(&self, state: &State) -> zbus::fdo::Result<Vec<IconPixmap>> {
+    fn attention_icon_pixmap(&self, state: &State) -> zbus::fdo::Result<Vec<IconPixmap>> {
+        self(state)
+    }
+}
+pub trait OverlayIconNameFn<State> {
+    fn overlay_icon_name(&self, state: &State) -> zbus::fdo::Result<String>;
+}
+
+impl<State> OverlayIconNameFn<State> for &str {
+    fn overlay_icon_name(&self, _state: &State) -> zbus::fdo::Result<String> {
+        Ok(self.to_string())
+    }
+}
+
+impl<State> OverlayIconNameFn<State> for String {
+    fn overlay_icon_name(&self, _state: &State) -> zbus::fdo::Result<String> {
+        Ok(self.clone())
+    }
+}
+
+impl<State, T> OverlayIconNameFn<State> for T
+where
+    T: Fn(&State) -> zbus::fdo::Result<String>,
+{
+    fn overlay_icon_name(&self, state: &State) -> zbus::fdo::Result<String> {
         self(state)
     }
 }
@@ -451,7 +479,11 @@ where
     fn attention_icon_pixmap(&self) -> zbus::fdo::Result<Vec<IconPixmap>> {
         self.program.attention_icon_pixmap(&self.state)
     }
-
+    /// OverlayIconName property
+    #[zbus(property)]
+    fn overlay_icon_name(&self) -> zbus::fdo::Result<String> {
+        self.program.overlay_icon_name(&self.state)
+    }
     /// Category property
     #[zbus(property)]
     fn category(&self) -> zbus::fdo::Result<String> {
@@ -494,10 +526,6 @@ pub trait StatusNotifierItemBackend {
     /// IconThemePath property
     #[zbus(property)]
     fn icon_theme_path(&self) -> zbus::Result<String>;
-
-    /// OverlayIconName property
-    #[zbus(property)]
-    fn overlay_icon_name(&self) -> zbus::Result<String>;
 
     /// OverlayIconPixmap property
     #[zbus(property)]
