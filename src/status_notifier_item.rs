@@ -20,6 +20,7 @@
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 
+use serde::{Deserialize, Serialize};
 use zbus::{
     interface,
     object_server::SignalEmitter,
@@ -42,7 +43,7 @@ struct ToolTip {
     description: String,
 }
 
-#[derive(Clone, PartialEq, Type, OwnedValue, Value, Debug, Default)]
+#[derive(Clone, PartialEq, Type, OwnedValue, Value, Debug, Default, Serialize, Deserialize)]
 #[zvariant(signature = "s")]
 pub enum NotifierStatus {
     #[default]

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use status_notifier::{
-    dbusmenu::{MenuItem, MenuProperty, MenuStatus, PropertyItem},
+    dbusmenu::{EventUpdate, MenuItem, MenuProperty, MenuStatus, PropertyItem},
     tray,
 };
 use zbus::{fdo::Result, zvariant::OwnedValue};
@@ -70,7 +70,7 @@ impl Menu {
                         item: MenuProperty {
                             label: Some("World".to_owned()),
                             icon_name: Some("fcitx_pinyin".to_owned()),
-                            enabled: Some(false),
+                            enabled: Some(true),
                             ..Default::default()
                         },
                         sub_menus: vec![],
@@ -103,7 +103,7 @@ impl Menu {
                 item: MenuProperty {
                     label: Some("World".to_owned()),
                     icon_name: Some("fcitx_pinyin".to_owned()),
-                    enabled: Some(false),
+                    enabled: Some(true),
                     ..Default::default()
                 },
             },
@@ -112,6 +112,11 @@ impl Menu {
 
     fn status(&self) -> MenuStatus {
         MenuStatus::Normal
+    }
+
+    fn on_clicked(&mut self, _id: i32, _timestamp: u32) -> EventUpdate {
+        println!("Yes, here!");
+        EventUpdate::None
     }
 }
 
@@ -133,6 +138,7 @@ async fn main() {
     .with_layout(Menu::get_layout)
     .with_get_group_properties(Menu::get_group_properties)
     .with_menu_status(Menu::status)
+    .with_on_clicked(Menu::on_clicked)
     .run()
     .await
     .unwrap();

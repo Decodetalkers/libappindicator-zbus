@@ -24,6 +24,10 @@ use zbus::zvariant::{self, OwnedValue, Type, Value, as_value::optional};
 
 use zbus::{interface, object_server::SignalEmitter, proxy};
 
+pub mod event_types;
+
+pub use event_types::*;
+
 #[derive(Type, Debug, Serialize, Deserialize, Default, OwnedValue, Value)]
 /// Specified options for a [`Screencast::create_session`] request.
 #[zvariant(signature = "dict")]
@@ -55,8 +59,9 @@ pub struct MenuItem {
     pub item: MenuProperty,
     pub sub_menus: Vec<zvariant::OwnedValue>,
 }
-#[derive(Clone, PartialEq, Type, OwnedValue, Value, Debug, Default)]
-#[zvariant(signature = "s")]
+
+#[derive(Clone, PartialEq, Type, Serialize, Deserialize, OwnedValue, Value, Debug, Default)]
+#[zvariant(signature = "s", rename_all = "lowercase")]
 pub enum MenuStatus {
     #[default]
     Normal,
@@ -96,12 +101,14 @@ pub trait DBusMenuItem {
     fn boot(&self) -> Self::State;
 
     fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool>;
+
+    #[allow(unused)]
     fn get_layout(
         &self,
-        _state: &mut Self::State,
-        _parent_id: i32,
-        _recursion_depth: i32,
-        _property_names: Vec<String>,
+        state: &mut Self::State,
+        parent_id: i32,
+        recursion_depth: i32,
+        property_names: Vec<String>,
     ) -> zbus::fdo::Result<(u32, MenuItem)> {
         Ok((1, MenuItem::new()))
     }
@@ -118,6 +125,22 @@ pub trait DBusMenuItem {
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<Vec<PropertyItem>> {
         Ok(vec![])
+    }
+
+    #[allow(unused)]
+    fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
+        EventUpdate::None
+    }
+
+    #[allow(unused)]
+    fn on_toggled(
+        &self,
+        state: &mut Self::State,
+        id: i32,
+        status: ToggleStatus,
+        timestamp: u32,
+    ) -> EventUpdate {
+        EventUpdate::None
     }
 }
 
@@ -211,6 +234,49 @@ where
         self(state, ids, property_names)
     }
 }
+#[derive(Debug)]
+pub enum EventUpdate {
+    None,
+    Update { revision: u32, parent: i32 },
+}
+
+pub trait OnClickedFn<State> {
+    fn on_clicked(&self, state: &mut State, id: i32, timestamp: u32) -> EventUpdate;
+}
+
+impl<T, State> OnClickedFn<State> for T
+where
+    T: Fn(&mut State, i32, u32) -> EventUpdate,
+{
+    fn on_clicked(&self, state: &mut State, id: i32, timestamp: u32) -> EventUpdate {
+        self(state, id, timestamp)
+    }
+}
+
+pub trait OnToggledFn<State> {
+    fn on_toggled(
+        &self,
+        state: &mut State,
+        id: i32,
+        status: ToggleStatus,
+        timestamp: u32,
+    ) -> EventUpdate;
+}
+
+impl<T, State> OnToggledFn<State> for T
+where
+    T: Fn(&mut State, i32, ToggleStatus, u32) -> EventUpdate,
+{
+    fn on_toggled(
+        &self,
+        state: &mut State,
+        id: i32,
+        status: ToggleStatus,
+        timestamp: u32,
+    ) -> EventUpdate {
+        self(state, id, status, timestamp)
+    }
+}
 
 #[interface(name = "com.canonical.dbusmenu")]
 impl<Menu: DBusMenuItem> DBusMenuInstance<Menu>
@@ -261,15 +327,36 @@ where
     }
 
     /// Event method
-    #[allow(unused)]
-    fn event(
-        &self,
+    async fn event(
+        &mut self,
         id: i32,
         event_id: String,
         data: zbus::zvariant::OwnedValue,
         timestamp: u32,
+        #[zbus(object_server)] server: &zbus::ObjectServer,
     ) -> zbus::fdo::Result<()> {
-        println!("data: {data:?}, event_id: {event_id:?}, id: {id}");
+        let need_update = match event_id.as_str() {
+            "clicked" => self.program.on_clicked(&mut self.state, id, timestamp),
+            "toggled" => {
+                let status: ToggleStatus = data
+                    .try_into()
+                    .map_err(|e| zbus::fdo::Error::Failed(format!("data error: {e}")))?;
+                self.program
+                    .on_toggled(&mut self.state, id, status, timestamp)
+            }
+            _ => EventUpdate::None,
+        };
+        if let EventUpdate::Update { revision, parent } = need_update {
+            let iface_rf = server
+                .interface::<_, DBusMenuInstance<Menu>>("/MenuBar")
+                .await?;
+            let _ = DBusMenuInstance::<Menu>::layout_updated(
+                iface_rf.signal_emitter(),
+                revision,
+                parent,
+            )
+            .await;
+        }
         Ok(())
     }
 
