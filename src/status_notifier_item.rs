@@ -95,6 +95,11 @@ pub trait StatusNotifierItem {
     fn status(&self, state: &Self::State) -> zbus::fdo::Result<NotifierStatus> {
         Ok(NotifierStatus::Active)
     }
+
+    #[allow(unused)]
+    fn item_is_menu(&self, state: &Self::State) -> bool {
+        false
+    }
 }
 
 pub trait NotifierBootFn<State> {
@@ -272,7 +277,24 @@ where
         self(state)
     }
 }
+pub trait ItemIsMenuFn<State> {
+    fn item_is_menu(&self, state: &State) -> bool;
+}
 
+impl<State, T> ItemIsMenuFn<State> for T
+where
+    T: Fn(&State) -> bool,
+{
+    fn item_is_menu(&self, state: &State) -> bool {
+        self(state)
+    }
+}
+
+impl<State> ItemIsMenuFn<State> for bool {
+    fn item_is_menu(&self, _state: &State) -> bool {
+        self.clone()
+    }
+}
 pub struct StatusNotifierInstance<P: StatusNotifierItem> {
     pub(crate) program: P,
     pub(crate) state: P::State,
@@ -366,7 +388,7 @@ where
     /// ItemIsMenu property
     #[zbus(property)]
     fn item_is_menu(&self) -> zbus::fdo::Result<bool> {
-        Ok(false)
+        Ok(self.program.item_is_menu(&self.state))
     }
 }
 

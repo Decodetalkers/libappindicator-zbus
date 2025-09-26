@@ -62,8 +62,8 @@ impl Menu {
                             label: Some("Hello".to_owned()),
                             icon_name: Some("input-method".to_owned()),
                             enabled: Some(true),
-                            toggle_type: Some(ToggleType::Radio),
-                            toggle_state: Some(ToggleState::Selected),
+                            toggle_type: Some(ToggleType::Checkmark),
+                            toggle_state: Some(ToggleState::UnSelected),
                             ..Default::default()
                         },
                         sub_menus: vec![],
@@ -99,8 +99,8 @@ impl Menu {
                     label: Some("Hello".to_owned()),
                     icon_name: Some("input-method".to_owned()),
                     enabled: Some(true),
-                    toggle_type: Some(ToggleType::Radio),
-                    toggle_state: Some(ToggleState::Selected),
+                    toggle_type: Some(ToggleType::Checkmark),
+                    toggle_state: Some(ToggleState::UnSelected),
                     ..Default::default()
                 },
             },
@@ -124,6 +124,11 @@ impl Menu {
         println!("Yes, here!");
         EventUpdate::None
     }
+
+    fn on_toggled(&mut self, id: i32, status: ToggleState, timestamp: u32) -> EventUpdate {
+        println!("toggled, id = {id}, status = {status:?}, timestamp = {timestamp}");
+        EventUpdate::None
+    }
 }
 
 #[tokio::main]
@@ -135,6 +140,7 @@ async fn main() {
         Menu::boot,
         Menu::about_to_show,
     )
+    .with_item_is_menu(true)
     .with_icon_name("nheko")
     .with_activate(Base::activate)
     .with_category("ApplicationStatus")
@@ -145,6 +151,7 @@ async fn main() {
     .with_get_group_properties(Menu::get_group_properties)
     .with_menu_status(Menu::status)
     .with_on_clicked(Menu::on_clicked)
+    .with_on_toggled(Menu::on_toggled)
     .run()
     .await
     .unwrap();

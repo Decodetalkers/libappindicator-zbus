@@ -7,8 +7,9 @@ use crate::{
         OnToggledFn,
     },
     status_notifier_item::{
-        ActivateFn, CategoryFn, ContextMenuFn, IconNameFn, IdFn, NotifierBootFn, NotifierStatusFn,
-        ScrollFn, SecondaryActivateFn, StatusNotifierInstance, StatusNotifierItem, TitleFn,
+        ActivateFn, CategoryFn, ContextMenuFn, IconNameFn, IdFn, ItemIsMenuFn, NotifierBootFn,
+        NotifierStatusFn, ScrollFn, SecondaryActivateFn, StatusNotifierInstance,
+        StatusNotifierItem, TitleFn,
     },
     status_notifier_watcher::StatusNotifierWatcherProxy,
 };
@@ -163,6 +164,16 @@ where
         }
     }
 
+    pub fn with_item_is_menu(
+        self,
+        f: impl ItemIsMenuFn<P::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: with_item_is_menu(self.notifier_raw, f),
+            menu_raw: self.menu_raw,
+        }
+    }
+
     pub fn with_scroll(
         self,
         f: impl ScrollFn<P::State>,
@@ -270,6 +281,69 @@ where
         }
     }
 }
+fn with_item_is_menu<P: StatusNotifierItem>(
+    program: P,
+    is_menu: impl ItemIsMenuFn<P::State>,
+) -> impl StatusNotifierItem<State = P::State> {
+    struct WithItemIsMenu<P, F> {
+        program: P,
+        is_menu: F,
+    }
+    impl<P: StatusNotifierItem, F> StatusNotifierItem for WithItemIsMenu<P, F>
+    where
+        F: ItemIsMenuFn<P::State>,
+    {
+        type State = P::State;
+
+        fn id(&self) -> String {
+            self.program.id()
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn scroll(
+            &self,
+            state: &mut Self::State,
+            delta: i32,
+            orientation: &str,
+        ) -> zbus::fdo::Result<()> {
+            self.program.scroll(state, delta, orientation)
+        }
+        fn context_menu(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.context_menu(state, x, y)
+        }
+        fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.activate(state, x, y)
+        }
+        fn secondary_activate(
+            &self,
+            state: &mut Self::State,
+            x: i32,
+            y: i32,
+        ) -> zbus::fdo::Result<()> {
+            self.program.secondary_activate(state, x, y)
+        }
+        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.icon_name(state)
+        }
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.title(state)
+        }
+        fn category(&self) -> zbus::fdo::Result<String> {
+            self.program.category()
+        }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
+        }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.is_menu.item_is_menu(state)
+        }
+    }
+    WithItemIsMenu { program, is_menu }
+}
 
 fn with_icon_name<P: StatusNotifierItem>(
     program: P,
@@ -327,6 +401,9 @@ fn with_icon_name<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
             self.program.status(state)
+        }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
         }
     }
     WithTheme { program, icon }
@@ -388,6 +465,9 @@ fn with_context_menu<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
             self.program.status(state)
+        }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
         }
     }
     WithContextMenu {
@@ -453,6 +533,9 @@ fn with_scroll<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
             self.program.status(state)
         }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
+        }
     }
     WithScroll { program, scroll }
 }
@@ -516,6 +599,9 @@ fn with_category<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
             self.program.status(state)
         }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
+        }
     }
     WithCategory { program, category }
 }
@@ -577,6 +663,9 @@ fn with_activate<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
             self.program.status(state)
+        }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
         }
     }
     WithActive { program, activate }
@@ -640,6 +729,9 @@ fn with_secondary_activate<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
             self.program.status(state)
+        }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
         }
     }
     WithSecondaryActive {
@@ -705,6 +797,9 @@ fn with_tray_status<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
             Ok(self.status.status(state))
+        }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
         }
     }
     WithStatus { program, status }
