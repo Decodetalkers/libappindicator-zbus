@@ -78,7 +78,11 @@ pub trait StatusNotifierItem {
     ) -> zbus::fdo::Result<()> {
         Err(zbus::fdo::Error::NotSupported("Error".to_owned()))
     }
-    fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String>;
+
+    #[allow(unused)]
+    fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+        Ok("".to_string())
+    }
 
     fn category(&self) -> zbus::fdo::Result<String> {
         Ok("SystemService".to_string())

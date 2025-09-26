@@ -154,7 +154,7 @@ where
 
     pub fn with_icon_name(
         self,
-        f: impl Fn(&P::State) -> zbus::fdo::Result<String>,
+        f: impl IconNameFn<P::State>,
     ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
         Tray {
             notifier_raw: with_icon_name(self.notifier_raw, f),
@@ -252,7 +252,7 @@ where
 
 fn with_icon_name<P: StatusNotifierItem>(
     program: P,
-    icon: impl Fn(&P::State) -> zbus::fdo::Result<String>,
+    icon: impl IconNameFn<P::State>,
 ) -> impl StatusNotifierItem<State = P::State> {
     struct WithTheme<P, F> {
         program: P,
@@ -260,7 +260,7 @@ fn with_icon_name<P: StatusNotifierItem>(
     }
     impl<P: StatusNotifierItem, F> StatusNotifierItem for WithTheme<P, F>
     where
-        F: Fn(&P::State) -> zbus::fdo::Result<String>,
+        F: IconNameFn<P::State>,
     {
         type State = P::State;
 
@@ -293,7 +293,7 @@ fn with_icon_name<P: StatusNotifierItem>(
             self.program.secondary_activate(state, x, y)
         }
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
-            (self.icon)(state)
+            self.icon.icon_name(state)
         }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
@@ -840,7 +840,6 @@ fn with_menu_status<M: DBusMenuItem>(
 pub fn tray<State, MenuState>(
     boot: impl NotifierBootFn<State>,
     id: impl IdFn,
-    icon_name: impl IconNameFn<State>,
     title: impl TitleFn<State>,
 
     menu_boot: impl DBusMenuBootFn<MenuState>,
@@ -850,29 +849,22 @@ where
     State: 'static + Send + Sync,
 {
     use std::marker::PhantomData;
-    struct Instance<State, IdFn, IconFn, TitleFn, BootFn> {
+    struct Instance<State, IdFn, TitleFn, BootFn> {
         boot: BootFn,
         id: IdFn,
-        icon_name: IconFn,
         title: TitleFn,
         _state: PhantomData<State>,
     }
-    impl<State, IdFn, IconFn, TitleFn, BootFn> StatusNotifierItem
-        for Instance<State, IdFn, IconFn, TitleFn, BootFn>
+    impl<State, IdFn, TitleFn, BootFn> StatusNotifierItem for Instance<State, IdFn, TitleFn, BootFn>
     where
         BootFn: self::NotifierBootFn<State>,
         IdFn: self::IdFn,
-        IconFn: self::IconNameFn<State>,
         TitleFn: self::TitleFn<State>,
     {
         type State = State;
         fn id(&self) -> String {
             self.id.id()
         }
-        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
-            self.icon_name.icon_name(state)
-        }
-
         fn boot(&self) -> Self::State {
             self.boot.boot()
         }
@@ -905,7 +897,6 @@ where
         notifier_raw: Instance {
             boot,
             id,
-            icon_name,
             title,
             _state: PhantomData,
         },

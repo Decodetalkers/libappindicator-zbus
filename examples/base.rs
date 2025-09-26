@@ -120,11 +120,11 @@ async fn main() {
     let connection = tray(
         Base::boot,
         "hello",
-        "nheko",
         "fake_nheko",
         Menu::boot,
         Menu::about_to_show,
     )
+    .with_icon_name("nheko")
     .with_activate(Base::activate)
     .with_category("ApplicationStatus")
     .with_context_menu(Base::context_menu)
