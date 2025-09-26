@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 use crate::{
     dbusmenu::{
         AboutToShowFn, AboutToShowGroupFn, DBusMenuBootFn, DBusMenuInstance, DBusMenuItem,
-        EventUpdate, GetGroupPropertiesFn, GetLayoutFn, GetPropertyFn, MenuItem, MenuStatus,
-        MenuStatusFn, OnClickedFn, OnToggledFn, TextDirectionFn,
+        EventUpdate, GetGroupPropertiesFn, GetLayoutFn, GetPropertyFn, IconThemePathFn, MenuItem,
+        MenuStatus, MenuStatusFn, OnClickedFn, OnToggledFn, TextDirectionFn,
     },
     status_notifier_item::{
         ActivateFn, AttentionIconNameFn, CategoryFn, ContextMenuFn, IconNameFn, IdFn, ItemIsMenuFn,
@@ -309,6 +309,16 @@ where
         Tray {
             notifier_raw: self.notifier_raw,
             menu_raw: with_text_direction(self.menu_raw, f),
+        }
+    }
+
+    pub fn with_icon_theme_path(
+        self,
+        f: impl IconThemePathFn<M::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: self.notifier_raw,
+            menu_raw: with_icon_theme_path(self.menu_raw, f),
         }
     }
 
@@ -1010,6 +1020,9 @@ fn with_layout<M: DBusMenuItem>(
         fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
             self.program.text_direction(state)
         }
+        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
+            self.program.icon_theme_path(state)
+        }
     }
     WithLayout {
         program,
@@ -1087,6 +1100,9 @@ fn with_get_property<M: DBusMenuItem>(
         }
         fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
             self.program.text_direction(state)
+        }
+        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
+            self.program.icon_theme_path(state)
         }
     }
     WithGetProperty {
@@ -1168,6 +1184,9 @@ fn with_get_group_properties<M: DBusMenuItem>(
         fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
             self.program.text_direction(state)
         }
+        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
+            self.program.icon_theme_path(state)
+        }
     }
     WithGetGroupProperties {
         program,
@@ -1247,6 +1266,9 @@ fn with_menu_status<M: DBusMenuItem>(
         fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
             self.program.text_direction(state)
         }
+        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
+            self.program.icon_theme_path(state)
+        }
     }
     WithMenuStatus {
         program,
@@ -1325,6 +1347,9 @@ fn with_on_clicked<M: DBusMenuItem>(
         fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
             self.program.text_direction(state)
         }
+        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
+            self.program.icon_theme_path(state)
+        }
     }
     WithOnClicked {
         program,
@@ -1400,6 +1425,9 @@ fn with_on_toggled<M: DBusMenuItem>(
             timestamp: u32,
         ) -> EventUpdate {
             self.on_toggled.on_toggled(state, id, status, timestamp)
+        }
+        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
+            self.program.icon_theme_path(state)
         }
     }
     WithOnToggled {
@@ -1480,10 +1508,95 @@ fn with_text_direction<M: DBusMenuItem>(
         fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
             self.text_direction.text_direction(state)
         }
+        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
+            self.program.icon_theme_path(state)
+        }
     }
     WithTextDirection {
         program,
         text_direction,
+    }
+}
+
+fn with_icon_theme_path<M: DBusMenuItem>(
+    program: M,
+    icon_theme_path: impl IconThemePathFn<M::State>,
+) -> impl DBusMenuItem<State = M::State> {
+    struct WithIconThemePath<M, IconThemePathFn> {
+        program: M,
+        icon_theme_path: IconThemePathFn,
+    }
+
+    impl<M: DBusMenuItem, IconThemePathFn> DBusMenuItem for WithIconThemePath<M, IconThemePathFn>
+    where
+        IconThemePathFn: self::IconThemePathFn<M::State>,
+    {
+        type State = M::State;
+        fn get_layout(
+            &self,
+            state: &mut Self::State,
+            parent_id: i32,
+            recursion_depth: i32,
+            property_names: Vec<String>,
+        ) -> zbus::fdo::Result<(u32, MenuItem)> {
+            self.program
+                .get_layout(state, parent_id, recursion_depth, property_names)
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
+            self.program.about_to_show(state, id)
+        }
+        fn about_to_show_group(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+        ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+            self.program.about_to_show_group(state, ids)
+        }
+        fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
+            self.program.status(state)
+        }
+        fn get_group_properties(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+            property_names: Vec<String>,
+        ) -> zbus::fdo::Result<Vec<dbusmenu::PropertyItem>> {
+            self.program
+                .get_group_properties(state, ids, property_names)
+        }
+        fn get_property(
+            &self,
+            state: &mut Self::State,
+            id: i32,
+            name: String,
+        ) -> zbus::fdo::Result<dbusmenu::PropertyItem> {
+            self.program.get_property(state, id, name)
+        }
+        fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
+            self.program.on_clicked(state, id, timestamp)
+        }
+        fn on_toggled(
+            &self,
+            state: &mut Self::State,
+            id: i32,
+            status: dbusmenu::ToggleState,
+            timestamp: u32,
+        ) -> EventUpdate {
+            self.program.on_toggled(state, id, status, timestamp)
+        }
+        fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
+            self.program.text_direction(state)
+        }
+        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
+            self.icon_theme_path.icon_theme_path(state)
+        }
+    }
+    WithIconThemePath {
+        program,
+        icon_theme_path,
     }
 }
 
@@ -1560,6 +1673,9 @@ fn with_about_to_show_group<M: DBusMenuItem>(
         }
         fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
             self.program.text_direction(state)
+        }
+        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
+            self.program.icon_theme_path(state)
         }
     }
     WithAboutToShowGroup {

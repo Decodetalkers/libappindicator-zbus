@@ -22,7 +22,7 @@
 use serde::{Deserialize, Serialize};
 use zbus::zvariant::{self, OwnedValue, Type, Value, as_value::optional};
 
-use zbus::{interface, object_server::SignalEmitter, proxy};
+use zbus::{interface, object_server::SignalEmitter};
 
 pub mod event_types;
 
@@ -368,6 +368,25 @@ where
     }
 }
 
+pub trait IconThemePathFn<State> {
+    fn icon_theme_path(&self, state: &State) -> Vec<String>;
+}
+
+impl<State> IconThemePathFn<State> for Vec<String> {
+    fn icon_theme_path(&self, _state: &State) -> Vec<String> {
+        self.clone()
+    }
+}
+
+impl<T, State> IconThemePathFn<State> for T
+where
+    T: Fn(&State) -> Vec<String>,
+{
+    fn icon_theme_path(&self, state: &State) -> Vec<String> {
+        self(state)
+    }
+}
+
 pub trait AboutToShowGroupFn<State> {
     fn about_to_show_group(
         &self,
@@ -517,6 +536,11 @@ where
         self.program.text_direction(&self.state)
     }
 
+    #[zbus(property)]
+    fn icon_theme_path(&self) -> Vec<String> {
+        self.program.icon_theme_path(&self.state)
+    }
+
     /// ItemActivationRequested signal
     #[zbus(signal)]
     pub async fn item_activation_requested(
@@ -540,11 +564,4 @@ where
         revision: u32,
         parent: i32,
     ) -> zbus::Result<()>;
-}
-
-#[proxy(interface = "com.canonical.dbusmenu", default_path = "/MenuBar")]
-pub trait dbusmenu {
-    /// IconThemePath property
-    #[zbus(property)]
-    fn icon_theme_path(&self) -> zbus::Result<Vec<String>>;
 }
