@@ -355,7 +355,7 @@ pub trait TextDirectionFn<State> {
 
 impl<State> TextDirectionFn<State> for TextDirection {
     fn text_direction(&self, _state: &State) -> TextDirection {
-        self.clone()
+        *self
     }
 }
 

@@ -474,7 +474,7 @@ where
 
 impl<State> ItemIsMenuFn<State> for bool {
     fn item_is_menu(&self, _state: &State) -> bool {
-        self.clone()
+        *self
     }
 }
 
