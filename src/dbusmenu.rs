@@ -260,7 +260,7 @@ where
         data: zbus::zvariant::OwnedValue,
         timestamp: u32,
     ) -> zbus::fdo::Result<()> {
-        println!("gg");
+        println!("data: {data:?}, event_id: {event_id:?}, id: {id}");
         Ok(())
     }
 

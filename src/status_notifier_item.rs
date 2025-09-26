@@ -236,6 +236,12 @@ where
     fn title(&self) -> zbus::fdo::Result<String> {
         Ok("test".to_owned())
     }
+
+    /// ItemIsMenu property
+    #[zbus(property)]
+    fn item_is_menu(&self) -> zbus::fdo::Result<bool> {
+        Ok(false)
+    }
 }
 
 #[proxy(
@@ -263,9 +269,7 @@ pub trait StatusNotifierItemBackend {
     #[zbus(property)]
     fn icon_theme_path(&self) -> zbus::Result<String>;
 
-    /// ItemIsMenu property
-    #[zbus(property)]
-    fn item_is_menu(&self) -> zbus::Result<bool>;
+
 
     /// OverlayIconName property
     #[zbus(property)]

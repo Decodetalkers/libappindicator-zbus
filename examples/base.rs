@@ -43,7 +43,7 @@ impl Menu {
         Menu { need_update: false }
     }
     fn about_to_show(&mut self, id: i32) -> Result<bool> {
-        println!("{id}");
+        println!("about {id}");
         Ok(true)
     }
 
@@ -60,7 +60,7 @@ impl Menu {
                 item: MenuProperty::submenu(),
                 sub_menus: vec![
                     OwnedValue::try_from(MenuItem {
-                        id: 2,
+                        id: 1,
                         item: MenuProperty {
                             label: Some("Hello".to_owned()),
                             icon_name: Some("input-method".to_owned()),
@@ -71,11 +71,11 @@ impl Menu {
                     })
                     .unwrap(),
                     OwnedValue::try_from(MenuItem {
-                        id: 3,
+                        id: 2,
                         item: MenuProperty {
-                            label: Some("Hello".to_owned()),
-                            icon_name: Some("input-method".to_owned()),
-                            enabled: Some(true),
+                            label: Some("World".to_owned()),
+                            icon_name: Some("fcitx_pinyin".to_owned()),
+                            enabled: Some(false),
                             ..Default::default()
                         },
                         sub_menus: vec![],
@@ -95,18 +95,20 @@ impl Menu {
         self.need_update = true;
         Ok(vec![
             PropertyItem {
-                id: 2,
+                id: 1,
                 item: MenuProperty {
                     label: Some("Hello".to_owned()),
                     icon_name: Some("input-method".to_owned()),
+                    enabled: Some(true),
                     ..Default::default()
                 },
             },
             PropertyItem {
-                id: 3,
+                id: 2,
                 item: MenuProperty {
-                    label: Some("Hello".to_owned()),
-                    icon_name: Some("input-method".to_owned()),
+                    label: Some("World".to_owned()),
+                    icon_name: Some("fcitx_pinyin".to_owned()),
+                    enabled: Some(false),
                     ..Default::default()
                 },
             },
