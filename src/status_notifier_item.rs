@@ -91,6 +91,16 @@ pub trait StatusNotifierItem {
     }
 
     #[allow(unused)]
+    fn attention_icon_pixmap(&self, state: &Self::State) -> zbus::fdo::Result<Vec<IconPixmap>> {
+        Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
+    }
+
+    //#[allow(unused)]
+    //fn overlay_icon_pixmap(&self, state: &Self::State) -> zbus::fdo::Result<Vec<IconPixmap>> {
+    //    Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
+    //}
+
+    #[allow(unused)]
     fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
         Ok("".to_string())
     }
@@ -313,6 +323,19 @@ where
     }
 }
 
+pub trait AttentionIconPixmapFn<State> {
+    fn icon_pixmap(&self, state: &State) -> zbus::fdo::Result<Vec<IconPixmap>>;
+}
+
+impl<State, T> AttentionIconPixmapFn<State> for T
+where
+    T: Fn(&State) -> zbus::fdo::Result<Vec<IconPixmap>>,
+{
+    fn icon_pixmap(&self, state: &State) -> zbus::fdo::Result<Vec<IconPixmap>> {
+        self(state)
+    }
+}
+
 pub trait NotifierStatusFn<State> {
     fn status(&self, state: &State) -> NotifierStatus;
 }
@@ -423,6 +446,11 @@ where
     fn attention_icon_name(&self) -> zbus::fdo::Result<String> {
         self.program.attention_icon_name(&self.state)
     }
+    /// AttentionIconPixmap property
+    #[zbus(property)]
+    fn attention_icon_pixmap(&self) -> zbus::fdo::Result<Vec<IconPixmap>> {
+        self.program.attention_icon_pixmap(&self.state)
+    }
 
     /// Category property
     #[zbus(property)]
@@ -459,10 +487,6 @@ where
     default_path = "/StatusNotifierItem"
 )]
 pub trait StatusNotifierItemBackend {
-    /// AttentionIconPixmap property
-    #[zbus(property)]
-    fn attention_icon_pixmap(&self) -> zbus::Result<Vec<IconPixmap>>;
-
     /// AttentionMovieName property
     #[zbus(property)]
     fn attention_movie_name(&self) -> zbus::Result<String>;
