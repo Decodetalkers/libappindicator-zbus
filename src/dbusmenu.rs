@@ -461,10 +461,13 @@ where
     fn about_to_show(&mut self, id: i32) -> zbus::fdo::Result<bool> {
         self.program.about_to_show(&mut self.state, id)
     }
+
     /// AboutToShowGroup method
     fn about_to_show_group(&mut self, ids: Vec<i32>) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
         self.program.about_to_show_group(&mut self.state, ids)
     }
+
+    // NOTE: this should not implemented by user
     /// GetLayout method
     fn get_layout(
         &mut self,
@@ -476,6 +479,7 @@ where
             .get_layout(&mut self.state, parent_id, recursion_depth, property_names)
     }
 
+    // NOTE: this should not implemented by user
     /// GetGroupProperties method
     fn get_group_properties(
         &mut self,
@@ -486,6 +490,7 @@ where
             .get_group_properties(&mut self.state, ids, property_names)
     }
 
+    // NOTE: this should not implemented by user
     /// GetProperty method
     fn get_property(&mut self, id: i32, name: String) -> zbus::fdo::Result<PropertyItem> {
         self.program.get_property(&mut self.state, id, name)
