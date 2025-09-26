@@ -156,6 +156,16 @@ pub trait DBusMenuItem {
     }
 
     #[allow(unused)]
+    fn get_property(
+        &self,
+        state: &mut Self::State,
+        id: i32,
+        name: String,
+    ) -> zbus::fdo::Result<PropertyItem> {
+        Err(zbus::fdo::Error::Failed("Unimplemented".to_string()))
+    }
+
+    #[allow(unused)]
     fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
         EventUpdate::None
     }
@@ -174,6 +184,11 @@ pub trait DBusMenuItem {
     #[allow(unused)]
     fn text_direction(&self, state: &Self::State) -> TextDirection {
         TextDirection::Inherit
+    }
+
+    #[allow(unused)]
+    fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
+        vec![]
     }
 }
 
@@ -267,6 +282,29 @@ where
         self(state, ids, property_names)
     }
 }
+pub trait GetPropertyFn<State> {
+    fn get_property(
+        &self,
+        state: &mut State,
+        id: i32,
+        property_name: String,
+    ) -> zbus::fdo::Result<PropertyItem>;
+}
+
+impl<T, State> GetPropertyFn<State> for T
+where
+    T: Fn(&mut State, i32, String) -> zbus::fdo::Result<PropertyItem>,
+{
+    fn get_property(
+        &self,
+        state: &mut State,
+        id: i32,
+        property_name: String,
+    ) -> zbus::fdo::Result<PropertyItem> {
+        self(state, id, property_name)
+    }
+}
+
 #[derive(Debug)]
 pub enum EventUpdate {
     None,
@@ -386,14 +424,14 @@ where
     }
 
     /// GetProperty method
-    fn get_property(&self, _id: i32, _name: String) -> zbus::fdo::Result<OwnedValue> {
-        Ok(true.into())
+    fn get_property(&mut self, id: i32, name: String) -> zbus::fdo::Result<PropertyItem> {
+        self.program.get_property(&mut self.state, id, name)
     }
 
     /// Version property
     #[zbus(property)]
-    fn version(&self) -> zbus::fdo::Result<u32> {
-        Ok(2)
+    fn version(&self) -> u32 {
+        2
     }
 
     /// Status property
@@ -475,8 +513,8 @@ where
 
     /// TextDirection property
     #[zbus(property)]
-    fn text_direction(&self) -> zbus::fdo::Result<TextDirection> {
-        Ok(self.program.text_direction(&self.state))
+    fn text_direction(&self) -> TextDirection {
+        self.program.text_direction(&self.state)
     }
 
     /// ItemActivationRequested signal
