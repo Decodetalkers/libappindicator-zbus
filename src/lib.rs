@@ -4,11 +4,11 @@ use crate::{
     dbusmenu::{
         AboutToShowFn, DBusMenuBootFn, DBusMenuInstance, DBusMenuItem, EventUpdate,
         GetGroupPropertiesFn, GetLayoutFn, MenuItem, MenuStatus, MenuStatusFn, OnClickedFn,
-        OnToggledFn,
+        OnToggledFn, TextDirectionFn,
     },
     status_notifier_item::{
-        ActivateFn, CategoryFn, ContextMenuFn, IconNameFn, IdFn, ItemIsMenuFn, NotifierBootFn,
-        NotifierStatusFn, ScrollFn, SecondaryActivateFn, StatusNotifierInstance,
+        ActivateFn, AttentionIconNameFn, CategoryFn, ContextMenuFn, IconNameFn, IdFn, ItemIsMenuFn,
+        NotifierBootFn, NotifierStatusFn, ScrollFn, SecondaryActivateFn, StatusNotifierInstance,
         StatusNotifierItem, TitleFn,
     },
     status_notifier_watcher::StatusNotifierWatcherProxy,
@@ -164,6 +164,16 @@ where
         }
     }
 
+    pub fn with_attention_icon_name(
+        self,
+        f: impl AttentionIconNameFn<P::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: with_attention_icon_name(self.notifier_raw, f),
+            menu_raw: self.menu_raw,
+        }
+    }
+
     pub fn with_item_is_menu(
         self,
         f: impl ItemIsMenuFn<P::State>,
@@ -280,7 +290,18 @@ where
             menu_raw: with_on_toggled(self.menu_raw, f),
         }
     }
+
+    pub fn with_text_direction(
+        self,
+        f: impl TextDirectionFn<M::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: self.notifier_raw,
+            menu_raw: with_text_direction(self.menu_raw, f),
+        }
+    }
 }
+
 fn with_item_is_menu<P: StatusNotifierItem>(
     program: P,
     is_menu: impl ItemIsMenuFn<P::State>,
@@ -326,6 +347,9 @@ fn with_item_is_menu<P: StatusNotifierItem>(
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_name(state)
         }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
+        }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
@@ -344,16 +368,82 @@ fn with_item_is_menu<P: StatusNotifierItem>(
     }
     WithItemIsMenu { program, is_menu }
 }
+fn with_attention_icon_name<P: StatusNotifierItem>(
+    program: P,
+    icon: impl AttentionIconNameFn<P::State>,
+) -> impl StatusNotifierItem<State = P::State> {
+    struct WithAttentionIconName<P, F> {
+        program: P,
+        icon: F,
+    }
+    impl<P: StatusNotifierItem, F> StatusNotifierItem for WithAttentionIconName<P, F>
+    where
+        F: AttentionIconNameFn<P::State>,
+    {
+        type State = P::State;
+
+        fn id(&self) -> String {
+            self.program.id()
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn scroll(
+            &self,
+            state: &mut Self::State,
+            delta: i32,
+            orientation: &str,
+        ) -> zbus::fdo::Result<()> {
+            self.program.scroll(state, delta, orientation)
+        }
+        fn context_menu(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.context_menu(state, x, y)
+        }
+        fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.activate(state, x, y)
+        }
+        fn secondary_activate(
+            &self,
+            state: &mut Self::State,
+            x: i32,
+            y: i32,
+        ) -> zbus::fdo::Result<()> {
+            self.program.secondary_activate(state, x, y)
+        }
+        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.icon_name(state)
+        }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.icon.icon_name(state)
+        }
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.title(state)
+        }
+        fn category(&self) -> zbus::fdo::Result<String> {
+            self.program.category()
+        }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
+        }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
+        }
+    }
+    WithAttentionIconName { program, icon }
+}
 
 fn with_icon_name<P: StatusNotifierItem>(
     program: P,
     icon: impl IconNameFn<P::State>,
 ) -> impl StatusNotifierItem<State = P::State> {
-    struct WithTheme<P, F> {
+    struct WithIconName<P, F> {
         program: P,
         icon: F,
     }
-    impl<P: StatusNotifierItem, F> StatusNotifierItem for WithTheme<P, F>
+    impl<P: StatusNotifierItem, F> StatusNotifierItem for WithIconName<P, F>
     where
         F: IconNameFn<P::State>,
     {
@@ -390,6 +480,9 @@ fn with_icon_name<P: StatusNotifierItem>(
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.icon.icon_name(state)
         }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
+        }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
@@ -406,7 +499,7 @@ fn with_icon_name<P: StatusNotifierItem>(
             self.program.item_is_menu(state)
         }
     }
-    WithTheme { program, icon }
+    WithIconName { program, icon }
 }
 
 fn with_context_menu<P: StatusNotifierItem>(
@@ -456,6 +549,9 @@ fn with_context_menu<P: StatusNotifierItem>(
         }
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_name(state)
+        }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
         }
         fn category(&self) -> zbus::fdo::Result<String> {
             self.program.category()
@@ -524,6 +620,9 @@ fn with_scroll<P: StatusNotifierItem>(
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_name(state)
         }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
+        }
         fn category(&self) -> zbus::fdo::Result<String> {
             self.program.category()
         }
@@ -586,6 +685,9 @@ fn with_category<P: StatusNotifierItem>(
         }
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_name(state)
+        }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
         }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
@@ -652,6 +754,9 @@ fn with_activate<P: StatusNotifierItem>(
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_name(state)
         }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
+        }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
@@ -717,6 +822,9 @@ fn with_secondary_activate<P: StatusNotifierItem>(
         }
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_name(state)
+        }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
         }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
@@ -786,6 +894,9 @@ fn with_tray_status<P: StatusNotifierItem>(
         fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_name(state)
         }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
+        }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
@@ -805,6 +916,7 @@ fn with_tray_status<P: StatusNotifierItem>(
     WithStatus { program, status }
 }
 
+// NOTE: this part is for menu
 fn with_layout<M: DBusMenuItem>(
     program: M,
     get_layout: impl GetLayoutFn<M::State>,
@@ -858,6 +970,9 @@ fn with_layout<M: DBusMenuItem>(
             timestamp: u32,
         ) -> EventUpdate {
             self.program.on_toggled(state, id, status, timestamp)
+        }
+        fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
+            self.program.text_direction(state)
         }
     }
     WithLayout {
@@ -921,6 +1036,9 @@ fn with_get_group_properties<M: DBusMenuItem>(
         ) -> EventUpdate {
             self.program.on_toggled(state, id, status, timestamp)
         }
+        fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
+            self.program.text_direction(state)
+        }
     }
     WithGetGroupProperties {
         program,
@@ -982,6 +1100,9 @@ fn with_menu_status<M: DBusMenuItem>(
         ) -> EventUpdate {
             self.program.on_toggled(state, id, status, timestamp)
         }
+        fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
+            self.program.text_direction(state)
+        }
     }
     WithMenuStatus {
         program,
@@ -1042,10 +1163,77 @@ fn with_on_clicked<M: DBusMenuItem>(
         ) -> EventUpdate {
             self.program.on_toggled(state, id, status, timestamp)
         }
+        fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
+            self.program.text_direction(state)
+        }
     }
     WithOnClicked {
         program,
         on_clicked,
+    }
+}
+
+fn with_text_direction<M: DBusMenuItem>(
+    program: M,
+    text_direction: impl TextDirectionFn<M::State>,
+) -> impl DBusMenuItem<State = M::State> {
+    struct WithTextDirection<M, TextDirectionFn> {
+        program: M,
+        text_direction: TextDirectionFn,
+    }
+
+    impl<M: DBusMenuItem, TextDirectionFn> DBusMenuItem for WithTextDirection<M, TextDirectionFn>
+    where
+        TextDirectionFn: self::TextDirectionFn<M::State>,
+    {
+        type State = M::State;
+        fn get_layout(
+            &self,
+            state: &mut Self::State,
+            parent_id: i32,
+            recursion_depth: i32,
+            property_names: Vec<String>,
+        ) -> zbus::fdo::Result<(u32, MenuItem)> {
+            self.program
+                .get_layout(state, parent_id, recursion_depth, property_names)
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
+            self.program.about_to_show(state, id)
+        }
+        fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
+            self.program.status(state)
+        }
+        fn get_group_properties(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+            property_names: Vec<String>,
+        ) -> zbus::fdo::Result<Vec<dbusmenu::PropertyItem>> {
+            self.program
+                .get_group_properties(state, ids, property_names)
+        }
+        fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
+            self.program.on_clicked(state, id, timestamp)
+        }
+        fn on_toggled(
+            &self,
+            state: &mut Self::State,
+            id: i32,
+            status: dbusmenu::ToggleState,
+            timestamp: u32,
+        ) -> EventUpdate {
+            self.program.on_toggled(state, id, status, timestamp)
+        }
+        fn text_direction(&self, state: &Self::State) -> dbusmenu::TextDirection {
+            self.text_direction.text_direction(state)
+        }
+    }
+    WithTextDirection {
+        program,
+        text_direction,
     }
 }
 

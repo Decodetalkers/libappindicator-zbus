@@ -160,6 +160,11 @@ pub trait DBusMenuItem {
     ) -> EventUpdate {
         EventUpdate::None
     }
+
+    #[allow(unused)]
+    fn text_direction(&self, state: &Self::State) -> TextDirection {
+        TextDirection::Inherit
+    }
 }
 
 pub struct DBusMenuInstance<Menu: DBusMenuItem> {
@@ -296,6 +301,25 @@ where
     }
 }
 
+pub trait TextDirectionFn<State> {
+    fn text_direction(&self, state: &State) -> TextDirection;
+}
+
+impl<State> TextDirectionFn<State> for TextDirection {
+    fn text_direction(&self, _state: &State) -> TextDirection {
+        self.clone()
+    }
+}
+
+impl<T, State> TextDirectionFn<State> for T
+where
+    T: Fn(&State) -> TextDirection,
+{
+    fn text_direction(&self, state: &State) -> TextDirection {
+        self(state)
+    }
+}
+
 #[interface(name = "com.canonical.dbusmenu")]
 impl<Menu: DBusMenuItem> DBusMenuInstance<Menu>
 where
@@ -378,6 +402,49 @@ where
         Ok(())
     }
 
+    /// EventGroup method
+    async fn event_group(
+        &mut self,
+        events: Vec<(i32, String, zbus::zvariant::OwnedValue, u32)>,
+        #[zbus(object_server)] server: &zbus::ObjectServer,
+    ) -> zbus::fdo::Result<Vec<i32>> {
+        let mut output = vec![];
+        for (id, event_id, data, timestamp) in events {
+            let need_update = match event_id.as_str() {
+                "clicked" => self.program.on_clicked(&mut self.state, id, timestamp),
+                "toggled" => {
+                    let status: ToggleState = data
+                        .try_into()
+                        .map_err(|e| zbus::fdo::Error::Failed(format!("data error: {e}")))?;
+                    self.program
+                        .on_toggled(&mut self.state, id, status, timestamp)
+                }
+                _ => {
+                    continue;
+                }
+            };
+            if let EventUpdate::Update { revision, parent } = need_update {
+                let iface_rf = server
+                    .interface::<_, DBusMenuInstance<Menu>>("/MenuBar")
+                    .await?;
+                let _ = DBusMenuInstance::<Menu>::layout_updated(
+                    iface_rf.signal_emitter(),
+                    revision,
+                    parent,
+                )
+                .await;
+            }
+            output.push(id);
+        }
+        Ok(output)
+    }
+
+    /// TextDirection property
+    #[zbus(property)]
+    fn text_direction(&self) -> zbus::fdo::Result<TextDirection> {
+        Ok(self.program.text_direction(&self.state))
+    }
+
     /// ItemActivationRequested signal
     #[zbus(signal)]
     pub async fn item_activation_requested(
@@ -408,17 +475,7 @@ pub trait dbusmenu {
     /// AboutToShowGroup method
     fn about_to_show_group(&self, ids: &[i32]) -> zbus::Result<(Vec<i32>, Vec<i32>)>;
 
-    /// EventGroup method
-    fn event_group(
-        &self,
-        events: &[&(i32, &str, &zbus::zvariant::Value<'_>, u32)],
-    ) -> zbus::Result<Vec<i32>>;
-
     /// IconThemePath property
     #[zbus(property)]
     fn icon_theme_path(&self) -> zbus::Result<Vec<String>>;
-
-    /// TextDirection property
-    #[zbus(property)]
-    fn text_direction(&self) -> zbus::Result<String>;
 }

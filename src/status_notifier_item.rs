@@ -85,6 +85,11 @@ pub trait StatusNotifierItem {
         Ok("".to_string())
     }
 
+    #[allow(unused)]
+    fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+        Ok("".to_string())
+    }
+
     fn category(&self) -> zbus::fdo::Result<String> {
         Ok("SystemService".to_string())
     }
@@ -265,6 +270,31 @@ where
     }
 }
 
+pub trait AttentionIconNameFn<State> {
+    fn icon_name(&self, state: &State) -> zbus::fdo::Result<String>;
+}
+
+impl<State> AttentionIconNameFn<State> for &str {
+    fn icon_name(&self, _state: &State) -> zbus::fdo::Result<String> {
+        Ok(self.to_string())
+    }
+}
+
+impl<State> AttentionIconNameFn<State> for String {
+    fn icon_name(&self, _state: &State) -> zbus::fdo::Result<String> {
+        Ok(self.clone())
+    }
+}
+
+impl<State, T> AttentionIconNameFn<State> for T
+where
+    T: Fn(&State) -> zbus::fdo::Result<String>,
+{
+    fn icon_name(&self, state: &State) -> zbus::fdo::Result<String> {
+        self(state)
+    }
+}
+
 pub trait NotifierStatusFn<State> {
     fn status(&self, state: &State) -> NotifierStatus;
 }
@@ -362,6 +392,13 @@ where
     fn icon_name(&self) -> zbus::fdo::Result<String> {
         self.program.icon_name(&self.state)
     }
+
+    /// AttentionIconName property
+    #[zbus(property)]
+    fn attention_icon_name(&self) -> zbus::fdo::Result<String> {
+        self.program.attention_icon_name(&self.state)
+    }
+
     /// Category property
     #[zbus(property)]
     fn category(&self) -> zbus::fdo::Result<String> {
@@ -397,10 +434,6 @@ where
     default_path = "/StatusNotifierItem"
 )]
 pub trait StatusNotifierItemBackend {
-    /// AttentionIconName property
-    #[zbus(property)]
-    fn attention_icon_name(&self) -> zbus::Result<String>;
-
     /// AttentionIconPixmap property
     #[zbus(property)]
     fn attention_icon_pixmap(&self) -> zbus::Result<Vec<IconPixmap>>;

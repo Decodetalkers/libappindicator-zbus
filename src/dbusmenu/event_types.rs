@@ -22,3 +22,17 @@ pub enum ToggleState {
     Selected,
     TriState,
 }
+
+#[derive(
+    Deserialize, Serialize, Type, PartialEq, Debug, Value, Clone, Copy, OwnedValue, Default,
+)]
+#[zvariant(signature = "s")]
+pub enum TextDirection {
+    #[default]
+    #[zvariant(rename = "inherit")]
+    Inherit,
+    #[zvariant(rename = "rtl")]
+    Rtl,
+    #[zvariant(rename = "ltr")]
+    Ltr,
+}
