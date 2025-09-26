@@ -7,9 +7,9 @@ use crate::{
         MenuStatus, MenuStatusFn, OnClickedFn, OnToggledFn, TextDirectionFn,
     },
     status_notifier_item::{
-        ActivateFn, AttentionIconNameFn, CategoryFn, ContextMenuFn, IconNameFn, IdFn, ItemIsMenuFn,
-        NotifierBootFn, NotifierStatusFn, ScrollFn, SecondaryActivateFn, StatusNotifierInstance,
-        StatusNotifierItem, TitleFn,
+        ActivateFn, AttentionIconNameFn, CategoryFn, ContextMenuFn, IconNameFn, IconPixmapFn, IdFn,
+        ItemIsMenuFn, NotifierBootFn, NotifierStatusFn, ScrollFn, SecondaryActivateFn,
+        StatusNotifierInstance, StatusNotifierItem, TitleFn,
     },
     status_notifier_watcher::StatusNotifierWatcherProxy,
 };
@@ -163,7 +163,15 @@ where
             menu_raw: self.menu_raw,
         }
     }
-
+    pub fn with_icon_pixmap(
+        self,
+        f: impl IconPixmapFn<P::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: with_icon_pixmap(self.notifier_raw, f),
+            menu_raw: self.menu_raw,
+        }
+    }
     pub fn with_attention_icon_name(
         self,
         f: impl AttentionIconNameFn<P::State>,
@@ -396,6 +404,12 @@ fn with_item_is_menu<P: StatusNotifierItem>(
         fn item_is_menu(&self, state: &Self::State) -> bool {
             self.is_menu.item_is_menu(state)
         }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.icon_pixmap(state)
+        }
     }
     WithItemIsMenu { program, is_menu }
 }
@@ -461,6 +475,12 @@ fn with_attention_icon_name<P: StatusNotifierItem>(
         }
         fn item_is_menu(&self, state: &Self::State) -> bool {
             self.program.item_is_menu(state)
+        }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.icon_pixmap(state)
         }
     }
     WithAttentionIconName { program, icon }
@@ -529,6 +549,12 @@ fn with_icon_name<P: StatusNotifierItem>(
         fn item_is_menu(&self, state: &Self::State) -> bool {
             self.program.item_is_menu(state)
         }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.icon_pixmap(state)
+        }
     }
     WithIconName { program, icon }
 }
@@ -595,6 +621,12 @@ fn with_context_menu<P: StatusNotifierItem>(
         }
         fn item_is_menu(&self, state: &Self::State) -> bool {
             self.program.item_is_menu(state)
+        }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.icon_pixmap(state)
         }
     }
     WithContextMenu {
@@ -666,6 +698,12 @@ fn with_scroll<P: StatusNotifierItem>(
         fn item_is_menu(&self, state: &Self::State) -> bool {
             self.program.item_is_menu(state)
         }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.icon_pixmap(state)
+        }
     }
     WithScroll { program, scroll }
 }
@@ -735,6 +773,12 @@ fn with_category<P: StatusNotifierItem>(
         fn item_is_menu(&self, state: &Self::State) -> bool {
             self.program.item_is_menu(state)
         }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.icon_pixmap(state)
+        }
     }
     WithCategory { program, category }
 }
@@ -802,6 +846,12 @@ fn with_activate<P: StatusNotifierItem>(
         }
         fn item_is_menu(&self, state: &Self::State) -> bool {
             self.program.item_is_menu(state)
+        }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.icon_pixmap(state)
         }
     }
     WithActive { program, activate }
@@ -871,6 +921,12 @@ fn with_secondary_activate<P: StatusNotifierItem>(
         }
         fn item_is_menu(&self, state: &Self::State) -> bool {
             self.program.item_is_menu(state)
+        }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.icon_pixmap(state)
         }
     }
     WithSecondaryActive {
@@ -943,8 +999,91 @@ fn with_tray_status<P: StatusNotifierItem>(
         fn item_is_menu(&self, state: &Self::State) -> bool {
             self.program.item_is_menu(state)
         }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.icon_pixmap(state)
+        }
     }
     WithStatus { program, status }
+}
+
+fn with_icon_pixmap<P: StatusNotifierItem>(
+    program: P,
+    icon_pixmap: impl IconPixmapFn<P::State>,
+) -> impl StatusNotifierItem<State = P::State> {
+    struct WithIconPixmap<P, IconPixmapFn> {
+        program: P,
+        icon_pixmap: IconPixmapFn,
+    }
+    impl<P: StatusNotifierItem, IconPixmapFn> StatusNotifierItem for WithIconPixmap<P, IconPixmapFn>
+    where
+        IconPixmapFn: self::IconPixmapFn<P::State>,
+    {
+        type State = P::State;
+
+        fn id(&self) -> String {
+            self.program.id()
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn scroll(
+            &self,
+            state: &mut Self::State,
+            delta: i32,
+            orientation: &str,
+        ) -> zbus::fdo::Result<()> {
+            self.program.scroll(state, delta, orientation)
+        }
+        fn context_menu(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.context_menu(state, x, y)
+        }
+        fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.activate(state, x, y)
+        }
+
+        fn secondary_activate(
+            &self,
+            state: &mut Self::State,
+            x: i32,
+            y: i32,
+        ) -> zbus::fdo::Result<()> {
+            self.program.secondary_activate(state, x, y)
+        }
+        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.icon_name(state)
+        }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
+        }
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.title(state)
+        }
+        fn category(&self) -> zbus::fdo::Result<String> {
+            self.program.category()
+        }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
+        }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
+        }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.icon_pixmap.icon_pixmap(state)
+        }
+    }
+    WithIconPixmap {
+        program,
+        icon_pixmap,
+    }
 }
 
 // NOTE: this part is for menu

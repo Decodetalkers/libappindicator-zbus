@@ -29,10 +29,10 @@ use zbus::{
 };
 
 #[derive(Clone, PartialEq, Type, OwnedValue, Value, Debug, Default)]
-struct IconPixmap {
-    width: i32,
-    height: i32,
-    data: Vec<u8>,
+pub struct IconPixmap {
+    pub width: i32,
+    pub height: i32,
+    pub data: Vec<u8>,
 }
 
 #[derive(Clone, PartialEq, Type, OwnedValue, Value, Default, Debug)]
@@ -82,7 +82,12 @@ pub trait StatusNotifierItem {
 
     #[allow(unused)]
     fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
-        Ok("".to_string())
+        Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
+    }
+
+    #[allow(unused)]
+    fn icon_pixmap(&self, state: &Self::State) -> zbus::fdo::Result<Vec<IconPixmap>> {
+        Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
     }
 
     #[allow(unused)]
@@ -270,6 +275,19 @@ where
     }
 }
 
+pub trait IconPixmapFn<State> {
+    fn icon_pixmap(&self, state: &State) -> zbus::fdo::Result<Vec<IconPixmap>>;
+}
+
+impl<State, T> IconPixmapFn<State> for T
+where
+    T: Fn(&State) -> zbus::fdo::Result<Vec<IconPixmap>>,
+{
+    fn icon_pixmap(&self, state: &State) -> zbus::fdo::Result<Vec<IconPixmap>> {
+        self(state)
+    }
+}
+
 pub trait AttentionIconNameFn<State> {
     fn icon_name(&self, state: &State) -> zbus::fdo::Result<String>;
 }
@@ -325,6 +343,7 @@ impl<State> ItemIsMenuFn<State> for bool {
         self.clone()
     }
 }
+
 pub struct StatusNotifierInstance<P: StatusNotifierItem> {
     pub(crate) program: P,
     pub(crate) state: P::State,
@@ -393,6 +412,12 @@ where
         self.program.icon_name(&self.state)
     }
 
+    /// IconPixmap property
+    #[zbus(property)]
+    fn icon_pixmap(&self) -> zbus::fdo::Result<Vec<IconPixmap>> {
+        self.program.icon_pixmap(&self.state)
+    }
+
     /// AttentionIconName property
     #[zbus(property)]
     fn attention_icon_name(&self) -> zbus::fdo::Result<String> {
@@ -441,10 +466,6 @@ pub trait StatusNotifierItemBackend {
     /// AttentionMovieName property
     #[zbus(property)]
     fn attention_movie_name(&self) -> zbus::Result<String>;
-
-    /// IconPixmap property
-    #[zbus(property)]
-    fn icon_pixmap(&self) -> zbus::Result<Vec<IconPixmap>>;
 
     /// IconThemePath property
     #[zbus(property)]
