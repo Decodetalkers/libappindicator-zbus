@@ -1,6 +1,0 @@
-(uint32 2579,
-(0, 
-{'children-display': <'submenu'>}, 
-[<(100, {'label': <'Keyboard - English (US)'>, 'icon-name': <'input-keyboard'>, 'toggle-type': <'radio'>, 'toggle-state': <1>}, @av [])>, <(101, {'label': <'Pinyin'>, 'icon-name': <'fcitx-pinyin'>, 'toggle-type': <'radio'>, 'toggle-state': <0>}, @av [])>, <(102, {'label': <'Anthy'>, 'icon-name': <'fcitx-anthy'>, 'toggle-type': <'radio'>, 'toggle-state': <0>}, @av [])>, <(103, {'label': <'Mozc'>, 'icon-name': <'fcitx_mozc'>, 'toggle-type': <'radio'>, 'toggle-state': <0>}, @av [])>, <(2, {'type': <'separator'>}, @av [])>, <(4, {'label': <'Configure'>}, @av [])>, <(5, {'label': <'Restart'>, 'icon-name': <'view-refresh'>}, @av [])>, <(6, {'label': <'Exit'>, 'icon-name': <'application-exit'>}, @av [])>])
-
-)
