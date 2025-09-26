@@ -759,7 +759,7 @@ fn with_layout<M: DBusMenuItem>(
             &self,
             state: &mut Self::State,
             id: i32,
-            status: dbusmenu::ToggleStatus,
+            status: dbusmenu::ToggleState,
             timestamp: u32,
         ) -> EventUpdate {
             self.program.on_toggled(state, id, status, timestamp)
@@ -821,7 +821,7 @@ fn with_get_group_properties<M: DBusMenuItem>(
             &self,
             state: &mut Self::State,
             id: i32,
-            status: dbusmenu::ToggleStatus,
+            status: dbusmenu::ToggleState,
             timestamp: u32,
         ) -> EventUpdate {
             self.program.on_toggled(state, id, status, timestamp)
@@ -882,7 +882,7 @@ fn with_menu_status<M: DBusMenuItem>(
             &self,
             state: &mut Self::State,
             id: i32,
-            status: dbusmenu::ToggleStatus,
+            status: dbusmenu::ToggleState,
             timestamp: u32,
         ) -> EventUpdate {
             self.program.on_toggled(state, id, status, timestamp)
@@ -942,7 +942,7 @@ fn with_on_clicked<M: DBusMenuItem>(
             &self,
             state: &mut Self::State,
             id: i32,
-            status: dbusmenu::ToggleStatus,
+            status: dbusmenu::ToggleState,
             timestamp: u32,
         ) -> EventUpdate {
             self.program.on_toggled(state, id, status, timestamp)
@@ -1003,7 +1003,7 @@ fn with_on_toggled<M: DBusMenuItem>(
             &self,
             state: &mut Self::State,
             id: i32,
-            status: dbusmenu::ToggleStatus,
+            status: dbusmenu::ToggleState,
             timestamp: u32,
         ) -> EventUpdate {
             self.on_toggled.on_toggled(state, id, status, timestamp)

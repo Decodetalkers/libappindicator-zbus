@@ -1,7 +1,9 @@
 use std::time::Duration;
 
 use status_notifier::{
-    dbusmenu::{EventUpdate, MenuItem, MenuProperty, MenuStatus, PropertyItem},
+    dbusmenu::{
+        EventUpdate, MenuItem, MenuProperty, MenuStatus, PropertyItem, ToggleState, ToggleType,
+    },
     tray,
 };
 use zbus::{fdo::Result, zvariant::OwnedValue};
@@ -60,6 +62,8 @@ impl Menu {
                             label: Some("Hello".to_owned()),
                             icon_name: Some("input-method".to_owned()),
                             enabled: Some(true),
+                            toggle_type: Some(ToggleType::Radio),
+                            toggle_state: Some(ToggleState::Selected),
                             ..Default::default()
                         },
                         sub_menus: vec![],
@@ -95,6 +99,8 @@ impl Menu {
                     label: Some("Hello".to_owned()),
                     icon_name: Some("input-method".to_owned()),
                     enabled: Some(true),
+                    toggle_type: Some(ToggleType::Radio),
+                    toggle_state: Some(ToggleState::Selected),
                     ..Default::default()
                 },
             },

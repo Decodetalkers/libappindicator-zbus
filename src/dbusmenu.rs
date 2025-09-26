@@ -35,10 +35,18 @@ pub struct MenuProperty {
     #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
     pub label: Option<String>,
     #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
+    #[zvariant(rename = "icon-name")]
     pub icon_name: Option<String>,
     #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
     pub enabled: Option<bool>,
     #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
+    #[zvariant(rename = "toggle-type")]
+    pub toggle_type: Option<ToggleType>,
+    #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
+    #[zvariant(rename = "toggle-state")]
+    pub toggle_state: Option<ToggleState>,
+    #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
+    #[zvariant(rename = "children-display")]
     pub children_display: Option<String>,
 }
 
@@ -137,7 +145,7 @@ pub trait DBusMenuItem {
         &self,
         state: &mut Self::State,
         id: i32,
-        status: ToggleStatus,
+        status: ToggleState,
         timestamp: u32,
     ) -> EventUpdate {
         EventUpdate::None
@@ -258,20 +266,20 @@ pub trait OnToggledFn<State> {
         &self,
         state: &mut State,
         id: i32,
-        status: ToggleStatus,
+        status: ToggleState,
         timestamp: u32,
     ) -> EventUpdate;
 }
 
 impl<T, State> OnToggledFn<State> for T
 where
-    T: Fn(&mut State, i32, ToggleStatus, u32) -> EventUpdate,
+    T: Fn(&mut State, i32, ToggleState, u32) -> EventUpdate,
 {
     fn on_toggled(
         &self,
         state: &mut State,
         id: i32,
-        status: ToggleStatus,
+        status: ToggleState,
         timestamp: u32,
     ) -> EventUpdate {
         self(state, id, status, timestamp)
@@ -338,7 +346,7 @@ where
         let need_update = match event_id.as_str() {
             "clicked" => self.program.on_clicked(&mut self.state, id, timestamp),
             "toggled" => {
-                let status: ToggleStatus = data
+                let status: ToggleState = data
                     .try_into()
                     .map_err(|e| zbus::fdo::Error::Failed(format!("data error: {e}")))?;
                 self.program
