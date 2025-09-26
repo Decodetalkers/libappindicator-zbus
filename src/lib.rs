@@ -10,7 +10,7 @@ use crate::{
         ActivateFn, AttentionIconNameFn, AttentionIconPixmapFn, AttentionMovieNameFn, CategoryFn,
         ContextMenuFn, IconNameFn, IconPixmapFn, IconThemePathNotifierFn, IdFn, ItemIsMenuFn,
         NotifierBootFn, NotifierStatusFn, OverlayIconNameFn, OverlayIconPixmapFn, ScrollFn,
-        SecondaryActivateFn, StatusNotifierInstance, StatusNotifierItem, TitleFn,
+        SecondaryActivateFn, StatusNotifierInstance, StatusNotifierItem, TitleFn, ToolTipFn,
     },
     status_notifier_watcher::StatusNotifierWatcherProxy,
 };
@@ -153,6 +153,15 @@ where
             _notify_item: PhantomData,
             _menu_item: PhantomData,
         })
+    }
+    pub fn with_tool_tip(
+        self,
+        f: impl ToolTipFn<P::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: with_tool_tip(self.notifier_raw, f),
+            menu_raw: self.menu_raw,
+        }
     }
     pub fn with_tray_icon_theme_path(
         self,
@@ -427,6 +436,12 @@ fn with_item_is_menu<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
         }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
+        }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
         }
@@ -479,7 +494,105 @@ fn with_item_is_menu<P: StatusNotifierItem>(
     }
     WithItemIsMenu { program, is_menu }
 }
+fn with_tool_tip<P: StatusNotifierItem>(
+    program: P,
+    tool_tip: impl ToolTipFn<P::State>,
+) -> impl StatusNotifierItem<State = P::State> {
+    struct WithToolTip<P, F> {
+        program: P,
+        tool_tip: F,
+    }
+    impl<P: StatusNotifierItem, F> StatusNotifierItem for WithToolTip<P, F>
+    where
+        F: ToolTipFn<P::State>,
+    {
+        type State = P::State;
 
+        fn id(&self) -> String {
+            self.program.id()
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn scroll(
+            &self,
+            state: &mut Self::State,
+            delta: i32,
+            orientation: &str,
+        ) -> zbus::fdo::Result<()> {
+            self.program.scroll(state, delta, orientation)
+        }
+        fn context_menu(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.context_menu(state, x, y)
+        }
+        fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.activate(state, x, y)
+        }
+        fn secondary_activate(
+            &self,
+            state: &mut Self::State,
+            x: i32,
+            y: i32,
+        ) -> zbus::fdo::Result<()> {
+            self.program.secondary_activate(state, x, y)
+        }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.tool_tip.tool_tip(state)
+        }
+        fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.icon_theme_path(state)
+        }
+        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.icon_name(state)
+        }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.icon_pixmap(state)
+        }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
+        }
+        fn attention_icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.attention_icon_pixmap(state)
+        }
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
+        }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
+        }
+        fn overlay_icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.overlay_icon_pixmap(state)
+        }
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.title(state)
+        }
+        fn category(&self) -> zbus::fdo::Result<String> {
+            self.program.category()
+        }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
+        }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
+        }
+    }
+    WithToolTip { program, tool_tip }
+}
 fn with_tray_icon_theme_path<P: StatusNotifierItem>(
     program: P,
     theme_path: impl IconThemePathNotifierFn<P::State>,
@@ -521,6 +634,12 @@ fn with_tray_icon_theme_path<P: StatusNotifierItem>(
             y: i32,
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
+        }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
         }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.theme_path.icon_theme_path(state)
@@ -619,6 +738,12 @@ fn with_icon_name<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
         }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
+        }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
         }
@@ -713,6 +838,12 @@ fn with_icon_pixmap<P: StatusNotifierItem>(
             y: i32,
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
+        }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
         }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
@@ -812,6 +943,12 @@ fn with_attention_icon_name<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
         }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
+        }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
         }
@@ -908,6 +1045,12 @@ fn with_attention_icon_pixmap<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
         }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
+        }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
         }
@@ -1002,6 +1145,12 @@ fn with_attention_movie_name<P: StatusNotifierItem>(
             y: i32,
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
+        }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
         }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
@@ -1102,6 +1251,12 @@ fn with_overlay_icon_name<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
         }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
+        }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
         }
@@ -1196,6 +1351,12 @@ fn with_overlay_icon_pixmap<P: StatusNotifierItem>(
             y: i32,
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
+        }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
         }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
@@ -1295,6 +1456,12 @@ fn with_context_menu<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
+        }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
         }
@@ -1392,6 +1559,12 @@ fn with_scroll<P: StatusNotifierItem>(
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
         }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
+        }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
         }
@@ -1484,6 +1657,12 @@ fn with_category<P: StatusNotifierItem>(
             y: i32,
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
+        }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
         }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
@@ -1580,6 +1759,12 @@ fn with_activate<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
         }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
+        }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
         }
@@ -1675,6 +1860,12 @@ fn with_secondary_activate<P: StatusNotifierItem>(
             y: i32,
         ) -> zbus::fdo::Result<()> {
             self.secondary_activate.secondary_activate(state, x, y)
+        }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
         }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)
@@ -1773,6 +1964,12 @@ fn with_tray_status<P: StatusNotifierItem>(
             y: i32,
         ) -> zbus::fdo::Result<()> {
             self.program.secondary_activate(state, x, y)
+        }
+        fn tool_tip(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::ToolTip> {
+            self.program.tool_tip(state)
         }
         fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.icon_theme_path(state)

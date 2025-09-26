@@ -81,6 +81,11 @@ pub trait StatusNotifierItem {
     }
 
     #[allow(unused)]
+    fn tool_tip(&self, state: &Self::State) -> zbus::fdo::Result<ToolTip> {
+        Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
+    }
+
+    #[allow(unused)]
     fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
         Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
     }
@@ -469,6 +474,19 @@ impl<State> ItemIsMenuFn<State> for bool {
     }
 }
 
+pub trait ToolTipFn<State> {
+    fn tool_tip(&self, state: &State) -> zbus::fdo::Result<ToolTip>;
+}
+
+impl<State, T> ToolTipFn<State> for T
+where
+    T: Fn(&State) -> zbus::fdo::Result<ToolTip>,
+{
+    fn tool_tip(&self, state: &State) -> zbus::fdo::Result<ToolTip> {
+        self(state)
+    }
+}
+
 pub struct StatusNotifierInstance<P: StatusNotifierItem> {
     pub(crate) program: P,
     pub(crate) state: P::State,
@@ -529,6 +547,12 @@ where
     #[zbus(property)]
     fn menu(&self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
         Ok(OwnedObjectPath::try_from("/MenuBar").unwrap())
+    }
+
+    /// ToolTip property
+    #[zbus(property)]
+    fn tool_tip(&self) -> zbus::fdo::Result<ToolTip> {
+        self.program.tool_tip(&self.state)
     }
 
     /// IconThemePath property
@@ -615,10 +639,6 @@ where
     default_path = "/StatusNotifierItem"
 )]
 pub trait StatusNotifierItemBackend {
-    /// ToolTip property
-    #[zbus(property)]
-    fn tool_tip(&self) -> zbus::Result<ToolTip>;
-
     /// WindowId property
     #[zbus(property)]
     fn window_id(&self) -> zbus::Result<i32>;
