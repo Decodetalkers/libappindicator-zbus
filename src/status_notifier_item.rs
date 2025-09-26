@@ -99,10 +99,11 @@ pub trait StatusNotifierItem {
     fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
         Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
     }
-    //#[allow(unused)]
-    //fn overlay_icon_pixmap(&self, state: &Self::State) -> zbus::fdo::Result<Vec<IconPixmap>> {
-    //    Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
-    //}
+
+    #[allow(unused)]
+    fn overlay_icon_pixmap(&self, state: &Self::State) -> zbus::fdo::Result<Vec<IconPixmap>> {
+        Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
+    }
 
     #[allow(unused)]
     fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
@@ -364,6 +365,19 @@ where
     }
 }
 
+pub trait OverlayIconPixmapFn<State> {
+    fn overlay_icon_pixmap(&self, state: &State) -> zbus::fdo::Result<Vec<IconPixmap>>;
+}
+
+impl<State, T> OverlayIconPixmapFn<State> for T
+where
+    T: Fn(&State) -> zbus::fdo::Result<Vec<IconPixmap>>,
+{
+    fn overlay_icon_pixmap(&self, state: &State) -> zbus::fdo::Result<Vec<IconPixmap>> {
+        self(state)
+    }
+}
+
 pub trait NotifierStatusFn<State> {
     fn status(&self, state: &State) -> NotifierStatus;
 }
@@ -479,11 +493,19 @@ where
     fn attention_icon_pixmap(&self) -> zbus::fdo::Result<Vec<IconPixmap>> {
         self.program.attention_icon_pixmap(&self.state)
     }
+
     /// OverlayIconName property
     #[zbus(property)]
     fn overlay_icon_name(&self) -> zbus::fdo::Result<String> {
         self.program.overlay_icon_name(&self.state)
     }
+
+    /// OverlayIconPixmap property
+    #[zbus(property)]
+    fn overlay_icon_pixmap(&self) -> zbus::fdo::Result<Vec<IconPixmap>> {
+        self.program.overlay_icon_pixmap(&self.state)
+    }
+
     /// Category property
     #[zbus(property)]
     fn category(&self) -> zbus::fdo::Result<String> {
@@ -526,10 +548,6 @@ pub trait StatusNotifierItemBackend {
     /// IconThemePath property
     #[zbus(property)]
     fn icon_theme_path(&self) -> zbus::Result<String>;
-
-    /// OverlayIconPixmap property
-    #[zbus(property)]
-    fn overlay_icon_pixmap(&self) -> zbus::Result<Vec<IconPixmap>>;
 
     /// ToolTip property
     #[zbus(property)]
