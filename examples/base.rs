@@ -1,8 +1,7 @@
-use std::time::Duration;
-
 use status_notifier::{
     dbusmenu::{
-        EventUpdate, MenuItem, MenuProperty, MenuStatus, PropertyItem, ToggleState, ToggleType,
+        EventUpdate, MenuItem, MenuProperty, MenuStatus, PropertyItem, TextDirection, ToggleState,
+        ToggleType,
     },
     tray,
 };
@@ -31,13 +30,11 @@ impl Base {
     }
 }
 
-struct Menu {
-    need_update: bool,
-}
+struct Menu;
 
 impl Menu {
     fn boot() -> Self {
-        Menu { need_update: false }
+        Menu
     }
     fn about_to_show(&mut self, id: i32) -> Result<bool> {
         println!("about {id}");
@@ -91,7 +88,6 @@ impl Menu {
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<Vec<PropertyItem>> {
         println!("{ids:?},{property_names:?}");
-        self.need_update = true;
         Ok(vec![
             PropertyItem {
                 id: 1,
@@ -144,6 +140,7 @@ async fn main() {
     .with_icon_name("nheko")
     .with_activate(Base::activate)
     .with_category("ApplicationStatus")
+    .with_text_direction(TextDirection::Rtl)
     .with_context_menu(Base::context_menu)
     .with_scroll(Base::scroll)
     .with_secondary_activate(Base::secondary_activate)
@@ -157,27 +154,5 @@ async fn main() {
     .unwrap();
 
     println!("{:?}", connection.unique_name());
-
-    let mut revision = 0;
-    let _ = connection.notify_layout_changed(revision, 0).await;
-
-    loop {
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        let need_update = connection
-            .update_menu_state(|menu| {
-                let need_update = menu.need_update;
-                if need_update {
-                    menu.need_update = false;
-                }
-                need_update
-            })
-            .await
-            .unwrap();
-        if need_update {
-            revision += 1;
-            let _ = connection.notify_layout_changed(revision, 0).await;
-        }
-    }
-
-    //std::future::pending::<()>().await;
+    std::future::pending::<()>().await;
 }
