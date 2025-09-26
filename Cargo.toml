@@ -1,5 +1,5 @@
 [package]
-name = "status_notifier"
+name = "libappindicator-zbus"
 version = "0.1.0"
 edition = "2024"
 

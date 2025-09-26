@@ -1,4 +1,4 @@
-use status_notifier::{
+use libappindicator_zbus::{
     dbusmenu::{
         EventUpdate, MenuItem, MenuProperty, MenuStatus, PropertyItem, TextDirection, ToggleState,
         ToggleType,
