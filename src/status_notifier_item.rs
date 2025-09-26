@@ -36,11 +36,11 @@ pub struct IconPixmap {
 }
 
 #[derive(Clone, PartialEq, Type, OwnedValue, Value, Default, Debug)]
-struct ToolTip {
-    icon: String,
-    data: Vec<IconPixmap>,
-    title: String,
-    description: String,
+pub struct ToolTip {
+    pub icon: String,
+    pub data: Vec<IconPixmap>,
+    pub title: String,
+    pub description: String,
 }
 
 #[derive(Clone, PartialEq, Type, OwnedValue, Value, Debug, Default, Serialize, Deserialize)]
@@ -78,6 +78,11 @@ pub trait StatusNotifierItem {
         _y: i32,
     ) -> zbus::fdo::Result<()> {
         Err(zbus::fdo::Error::NotSupported("Error".to_owned()))
+    }
+
+    #[allow(unused)]
+    fn icon_theme_path(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+        Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
     }
 
     #[allow(unused)]
@@ -266,6 +271,31 @@ where
     T: Fn(&State) -> zbus::fdo::Result<String>,
 {
     fn title(&self, state: &State) -> zbus::fdo::Result<String> {
+        self(state)
+    }
+}
+
+pub trait IconThemePathNotifierFn<State> {
+    fn icon_theme_path(&self, state: &State) -> zbus::fdo::Result<String>;
+}
+
+impl<State> IconThemePathNotifierFn<State> for &str {
+    fn icon_theme_path(&self, _state: &State) -> zbus::fdo::Result<String> {
+        Ok(self.to_string())
+    }
+}
+
+impl<State> IconThemePathNotifierFn<State> for String {
+    fn icon_theme_path(&self, _state: &State) -> zbus::fdo::Result<String> {
+        Ok(self.clone())
+    }
+}
+
+impl<State, T> IconThemePathNotifierFn<State> for T
+where
+    T: Fn(&State) -> zbus::fdo::Result<String>,
+{
+    fn icon_theme_path(&self, state: &State) -> zbus::fdo::Result<String> {
         self(state)
     }
 }
@@ -501,6 +531,12 @@ where
         Ok(OwnedObjectPath::try_from("/MenuBar").unwrap())
     }
 
+    /// IconThemePath property
+    #[zbus(property)]
+    fn icon_theme_path(&self) -> zbus::fdo::Result<String> {
+        self.program.icon_theme_path(&self.state)
+    }
+
     /// IconName property
     #[zbus(property)]
     fn icon_name(&self) -> zbus::fdo::Result<String> {
@@ -579,10 +615,6 @@ where
     default_path = "/StatusNotifierItem"
 )]
 pub trait StatusNotifierItemBackend {
-    /// IconThemePath property
-    #[zbus(property)]
-    fn icon_theme_path(&self) -> zbus::Result<String>;
-
     /// ToolTip property
     #[zbus(property)]
     fn tool_tip(&self) -> zbus::Result<ToolTip>;
