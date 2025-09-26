@@ -1,9 +1,9 @@
 use libappindicator_zbus::{
-    dbusmenu::{
-        EventUpdate, MenuItem, MenuProperty, MenuStatus, PropertyItem, ToggleState, ToggleType,
-    },
-    status_notifier_item::IconPixmap,
     tray,
+    utils::{
+        EventUpdate, IconPixmap, MenuItem, MenuProperty, MenuStatus, PropertyItem, ToggleState,
+        ToggleType,
+    },
 };
 use zbus::{fdo::Result, zvariant::OwnedValue};
 
