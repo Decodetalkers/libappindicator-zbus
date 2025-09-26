@@ -46,7 +46,10 @@ pub trait StatusNotifierItem {
     type State;
     fn boot(&self) -> Self::State;
     fn id(&self) -> String;
-    fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()>;
+    #[allow(unused)]
+    fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+        Ok(())
+    }
     fn context_menu(&self, _state: &mut Self::State, _x: i32, _y: i32) -> zbus::fdo::Result<()> {
         Err(zbus::fdo::Error::NotSupported("Error".to_owned()))
     }
@@ -68,7 +71,9 @@ pub trait StatusNotifierItem {
     }
     fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String>;
 
-    fn category(&self) -> zbus::fdo::Result<String>;
+    fn category(&self) -> zbus::fdo::Result<String> {
+        Ok("SystemService".to_string())
+    }
 
     fn title(&self, state: &Self::State) -> zbus::fdo::Result<String>;
 }
@@ -107,6 +112,31 @@ impl IdFn for &str {
 
 impl IdFn for String {
     fn id(&self) -> String {
+        self.clone()
+    }
+}
+
+pub trait CategoryFn {
+    fn category(&self) -> String;
+}
+
+impl<T> CategoryFn for T
+where
+    T: Fn() -> String,
+{
+    fn category(&self) -> String {
+        self()
+    }
+}
+
+impl CategoryFn for &str {
+    fn category(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl CategoryFn for String {
+    fn category(&self) -> String {
         self.clone()
     }
 }
@@ -298,7 +328,7 @@ where
     /// Title property
     #[zbus(property)]
     fn title(&self) -> zbus::fdo::Result<String> {
-        Ok("test".to_owned())
+        self.program.title(&self.state)
     }
 
     /// ItemIsMenu property

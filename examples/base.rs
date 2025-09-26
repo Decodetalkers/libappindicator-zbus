@@ -120,14 +120,14 @@ async fn main() {
     let connection = tray(
         Base::boot,
         "hello",
-        Base::activate,
         "nheko",
         "fake_nheko",
-        "SystemService",
         Menu::boot,
         Menu::about_to_show,
         Menu::status,
     )
+    .with_activate(Base::activate)
+    .with_category("ApplicationStatus")
     .with_context_menu(Base::context_menu)
     .with_scroll(Base::scroll)
     .with_secondary_activate(Base::secondary_activate)
