@@ -91,6 +91,11 @@ pub trait StatusNotifierItem {
     }
 
     #[allow(unused)]
+    fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+        Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
+    }
+
+    #[allow(unused)]
     fn attention_icon_pixmap(&self, state: &Self::State) -> zbus::fdo::Result<Vec<IconPixmap>> {
         Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
     }
@@ -106,8 +111,8 @@ pub trait StatusNotifierItem {
     }
 
     #[allow(unused)]
-    fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
-        Ok("".to_string())
+    fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+        Err(zbus::fdo::Error::NotSupported("Unimplemented".to_string()))
     }
 
     fn category(&self) -> zbus::fdo::Result<String> {
@@ -304,17 +309,17 @@ where
 }
 
 pub trait AttentionIconNameFn<State> {
-    fn icon_name(&self, state: &State) -> zbus::fdo::Result<String>;
+    fn attention_icon_name(&self, state: &State) -> zbus::fdo::Result<String>;
 }
 
 impl<State> AttentionIconNameFn<State> for &str {
-    fn icon_name(&self, _state: &State) -> zbus::fdo::Result<String> {
+    fn attention_icon_name(&self, _state: &State) -> zbus::fdo::Result<String> {
         Ok(self.to_string())
     }
 }
 
 impl<State> AttentionIconNameFn<State> for String {
-    fn icon_name(&self, _state: &State) -> zbus::fdo::Result<String> {
+    fn attention_icon_name(&self, _state: &State) -> zbus::fdo::Result<String> {
         Ok(self.clone())
     }
 }
@@ -323,7 +328,7 @@ impl<State, T> AttentionIconNameFn<State> for T
 where
     T: Fn(&State) -> zbus::fdo::Result<String>,
 {
-    fn icon_name(&self, state: &State) -> zbus::fdo::Result<String> {
+    fn attention_icon_name(&self, state: &State) -> zbus::fdo::Result<String> {
         self(state)
     }
 }
@@ -340,6 +345,31 @@ where
         self(state)
     }
 }
+pub trait AttentionMovieNameFn<State> {
+    fn attention_movie_name(&self, state: &State) -> zbus::fdo::Result<String>;
+}
+
+impl<State> AttentionMovieNameFn<State> for &str {
+    fn attention_movie_name(&self, _state: &State) -> zbus::fdo::Result<String> {
+        Ok(self.to_string())
+    }
+}
+
+impl<State> AttentionMovieNameFn<State> for String {
+    fn attention_movie_name(&self, _state: &State) -> zbus::fdo::Result<String> {
+        Ok(self.clone())
+    }
+}
+
+impl<State, T> AttentionMovieNameFn<State> for T
+where
+    T: Fn(&State) -> zbus::fdo::Result<String>,
+{
+    fn attention_movie_name(&self, state: &State) -> zbus::fdo::Result<String> {
+        self(state)
+    }
+}
+
 pub trait OverlayIconNameFn<State> {
     fn overlay_icon_name(&self, state: &State) -> zbus::fdo::Result<String>;
 }
@@ -488,10 +518,17 @@ where
     fn attention_icon_name(&self) -> zbus::fdo::Result<String> {
         self.program.attention_icon_name(&self.state)
     }
+
     /// AttentionIconPixmap property
     #[zbus(property)]
     fn attention_icon_pixmap(&self) -> zbus::fdo::Result<Vec<IconPixmap>> {
         self.program.attention_icon_pixmap(&self.state)
+    }
+
+    /// AttentionMovieName property
+    #[zbus(property)]
+    fn attention_movie_name(&self) -> zbus::fdo::Result<String> {
+        self.program.attention_movie_name(&self.state)
     }
 
     /// OverlayIconName property
@@ -511,6 +548,7 @@ where
     fn category(&self) -> zbus::fdo::Result<String> {
         self.program.category()
     }
+
     /// Id property
     #[zbus(property)]
     fn id(&self) -> zbus::fdo::Result<String> {
@@ -541,10 +579,6 @@ where
     default_path = "/StatusNotifierItem"
 )]
 pub trait StatusNotifierItemBackend {
-    /// AttentionMovieName property
-    #[zbus(property)]
-    fn attention_movie_name(&self) -> zbus::Result<String>;
-
     /// IconThemePath property
     #[zbus(property)]
     fn icon_theme_path(&self) -> zbus::Result<String>;

@@ -7,9 +7,9 @@ use crate::{
         MenuStatus, MenuStatusFn, OnClickedFn, OnToggledFn, TextDirectionFn,
     },
     status_notifier_item::{
-        ActivateFn, AttentionIconNameFn, AttentionIconPixmapFn, CategoryFn, ContextMenuFn,
-        IconNameFn, IconPixmapFn, IdFn, ItemIsMenuFn, NotifierBootFn, NotifierStatusFn,
-        OverlayIconNameFn, OverlayIconPixmapFn, ScrollFn, SecondaryActivateFn,
+        ActivateFn, AttentionIconNameFn, AttentionIconPixmapFn, AttentionMovieNameFn, CategoryFn,
+        ContextMenuFn, IconNameFn, IconPixmapFn, IdFn, ItemIsMenuFn, NotifierBootFn,
+        NotifierStatusFn, OverlayIconNameFn, OverlayIconPixmapFn, ScrollFn, SecondaryActivateFn,
         StatusNotifierInstance, StatusNotifierItem, TitleFn,
     },
     status_notifier_watcher::StatusNotifierWatcherProxy,
@@ -188,6 +188,15 @@ where
     ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
         Tray {
             notifier_raw: with_attention_icon_pixmap(self.notifier_raw, f),
+            menu_raw: self.menu_raw,
+        }
+    }
+    pub fn with_attention_movie_name(
+        self,
+        f: impl AttentionMovieNameFn<P::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: with_attention_movie_name(self.notifier_raw, f),
             menu_raw: self.menu_raw,
         }
     }
@@ -429,6 +438,9 @@ fn with_item_is_menu<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
         }
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
+        }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.overlay_icon_name(state)
         }
@@ -517,6 +529,9 @@ fn with_icon_name<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
         }
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
+        }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.overlay_icon_name(state)
         }
@@ -603,14 +618,18 @@ fn with_icon_pixmap<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.overlay_icon_pixmap(state)
         }
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
+        }
         fn attention_icon_pixmap(
             &self,
             state: &Self::State,
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
         }
-        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
-            self.program.attention_icon_name(state)
+
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
         }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.overlay_icon_name(state)
@@ -688,14 +707,9 @@ fn with_attention_icon_name<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.icon_pixmap(state)
         }
-        fn overlay_icon_pixmap(
-            &self,
-            state: &Self::State,
-        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
-            self.program.overlay_icon_pixmap(state)
-        }
+
         fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
-            self.icon.icon_name(state)
+            self.icon.attention_icon_name(state)
         }
 
         fn attention_icon_pixmap(
@@ -704,8 +718,17 @@ fn with_attention_icon_name<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
         }
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
+        }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.overlay_icon_name(state)
+        }
+        fn overlay_icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.overlay_icon_pixmap(state)
         }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
@@ -787,7 +810,9 @@ fn with_attention_icon_pixmap<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.pixmaps.attention_icon_pixmap(state)
         }
-
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
+        }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.overlay_icon_name(state)
         }
@@ -814,6 +839,102 @@ fn with_attention_icon_pixmap<P: StatusNotifierItem>(
         }
     }
     WithAttentionPixmap { program, pixmaps }
+}
+
+fn with_attention_movie_name<P: StatusNotifierItem>(
+    program: P,
+    movie_name: impl AttentionMovieNameFn<P::State>,
+) -> impl StatusNotifierItem<State = P::State> {
+    struct WithAttentionMovieName<P, F> {
+        program: P,
+        movie_name: F,
+    }
+    impl<P: StatusNotifierItem, F> StatusNotifierItem for WithAttentionMovieName<P, F>
+    where
+        F: AttentionMovieNameFn<P::State>,
+    {
+        type State = P::State;
+
+        fn id(&self) -> String {
+            self.program.id()
+        }
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn scroll(
+            &self,
+            state: &mut Self::State,
+            delta: i32,
+            orientation: &str,
+        ) -> zbus::fdo::Result<()> {
+            self.program.scroll(state, delta, orientation)
+        }
+        fn context_menu(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.context_menu(state, x, y)
+        }
+        fn activate(&self, state: &mut Self::State, x: i32, y: i32) -> zbus::fdo::Result<()> {
+            self.program.activate(state, x, y)
+        }
+        fn secondary_activate(
+            &self,
+            state: &mut Self::State,
+            x: i32,
+            y: i32,
+        ) -> zbus::fdo::Result<()> {
+            self.program.secondary_activate(state, x, y)
+        }
+        fn icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.icon_name(state)
+        }
+        fn icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.icon_pixmap(state)
+        }
+
+        fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_icon_name(state)
+        }
+
+        fn attention_icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.attention_icon_pixmap(state)
+        }
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.movie_name.attention_movie_name(state)
+        }
+        fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.overlay_icon_name(state)
+        }
+        fn overlay_icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.overlay_icon_pixmap(state)
+        }
+        fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.title(state)
+        }
+        fn category(&self) -> zbus::fdo::Result<String> {
+            self.program.category()
+        }
+        fn status(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<status_notifier_item::NotifierStatus> {
+            self.program.status(state)
+        }
+        fn item_is_menu(&self, state: &Self::State) -> bool {
+            self.program.item_is_menu(state)
+        }
+    }
+    WithAttentionMovieName {
+        program,
+        movie_name,
+    }
 }
 
 fn with_overlay_icon_name<P: StatusNotifierItem>(
@@ -876,6 +997,9 @@ fn with_overlay_icon_name<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
+        }
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
         }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.icon.overlay_icon_name(state)
@@ -966,7 +1090,9 @@ fn with_overlay_icon_pixmap<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
         }
-
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
+        }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.overlay_icon_name(state)
         }
@@ -1057,6 +1183,9 @@ fn with_context_menu<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
+        }
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
         }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.overlay_icon_name(state)
@@ -1149,6 +1278,9 @@ fn with_scroll<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
         }
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
+        }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.overlay_icon_name(state)
         }
@@ -1236,6 +1368,9 @@ fn with_category<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
         }
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
+        }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.overlay_icon_name(state)
         }
@@ -1316,12 +1451,6 @@ fn with_activate<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.icon_pixmap(state)
         }
-        fn overlay_icon_pixmap(
-            &self,
-            state: &Self::State,
-        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
-            self.program.overlay_icon_pixmap(state)
-        }
         fn attention_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.attention_icon_name(state)
         }
@@ -1331,8 +1460,17 @@ fn with_activate<P: StatusNotifierItem>(
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
         }
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
+        }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.overlay_icon_name(state)
+        }
+        fn overlay_icon_pixmap(
+            &self,
+            state: &Self::State,
+        ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
+            self.program.overlay_icon_pixmap(state)
         }
         fn title(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.title(state)
@@ -1414,6 +1552,9 @@ fn with_secondary_activate<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
+        }
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
         }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.overlay_icon_name(state)
@@ -1506,6 +1647,9 @@ fn with_tray_status<P: StatusNotifierItem>(
             state: &Self::State,
         ) -> zbus::fdo::Result<Vec<status_notifier_item::IconPixmap>> {
             self.program.attention_icon_pixmap(state)
+        }
+        fn attention_movie_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
+            self.program.attention_movie_name(state)
         }
         fn overlay_icon_name(&self, state: &Self::State) -> zbus::fdo::Result<String> {
             self.program.overlay_icon_name(state)
