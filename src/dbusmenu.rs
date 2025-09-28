@@ -92,6 +92,56 @@ impl Deref for Id {
     }
 }
 
+pub struct MenuUnit<Message> {
+    pub id: Id,
+    pub property: MenuProperty,
+    pub sub_menus: Vec<MenuUnit<Message>>,
+    pub message: Message,
+}
+
+impl<Message> From<MenuUnit<Message>> for MenuItem {
+    fn from(value: MenuUnit<Message>) -> Self {
+        let mut output = MenuItem {
+            id: value.id,
+            property: value.property,
+            sub_menus: vec![],
+        };
+        for sub_menu in value.sub_menus {
+            output = output.push_sub_menu(sub_menu.into());
+        }
+        output
+    }
+}
+
+impl<Message> Clone for MenuUnit<Message>
+where
+    Message: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id.clone(),
+            property: self.property.clone(),
+            sub_menus: self.sub_menus.clone(),
+            message: self.message.clone(),
+        }
+    }
+}
+
+impl<Message> MenuUnit<Message> {
+    pub fn new(property: MenuProperty, message: Message) -> Self {
+        Self {
+            id: Id::unique(),
+            property,
+            sub_menus: vec![],
+            message,
+        }
+    }
+    pub fn push_sub_menu(mut self, menu: Self) -> Self {
+        self.sub_menus.push(menu);
+        self
+    }
+}
+
 #[derive(Type, Debug, Serialize, Deserialize, OwnedValue, Value, Clone)]
 #[zvariant(signature = "(ia{sv}av)")]
 pub struct MenuItem {
@@ -226,10 +276,11 @@ pub struct PropertyItem {
 
 pub trait DBusMenuItem {
     type State;
+    type Message;
 
     fn boot(&self) -> Self::State;
 
-    fn menu(&self, state: &Self::State) -> MenuItem;
+    fn menu(&self, state: &Self::State) -> MenuUnit<Self::Message>;
 
     fn revision(&self, state: &Self::State) -> u32;
 
@@ -347,15 +398,15 @@ impl<State> RevisionFn<State> for u32 {
     }
 }
 
-pub trait MenuFn<State> {
-    fn menu(&self, state: &State) -> MenuItem;
+pub trait MenuFn<State, Message> {
+    fn menu(&self, state: &State) -> MenuUnit<Message>;
 }
 
-impl<State, F> MenuFn<State> for F
+impl<State, Message, F> MenuFn<State, Message> for F
 where
-    F: Fn(&State) -> MenuItem,
+    F: Fn(&State) -> MenuUnit<Message>,
 {
-    fn menu(&self, state: &State) -> MenuItem {
+    fn menu(&self, state: &State) -> MenuUnit<Message> {
         self(state)
     }
 }
@@ -481,10 +532,10 @@ where
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<(u32, MenuItem)> {
         let property_names: Vec<&str> = property_names.iter().map(|name| name.as_str()).collect();
+        let menuitem: MenuItem = self.program.menu(&self.state).into();
         Ok((
             self.program.revision(&self.state),
-            self.program
-                .menu(&self.state)
+            menuitem
                 .get_filiter(parent_id, recursion_depth, &property_names)
                 .ok_or(zbus::fdo::Error::Failed("UnFounded".to_string()))?,
         ))
@@ -497,17 +548,15 @@ where
         ids: Vec<i32>,
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        Ok(self
-            .program
-            .menu(&self.state)
-            .get_property_groups(ids, property_names))
+        let menuitem: MenuItem = self.program.menu(&self.state).into();
+        Ok(menuitem.get_property_groups(ids, property_names))
     }
 
     // NOTE: this should not implemented by user
     /// GetProperty method
     fn get_property(&mut self, id: i32, name: String) -> zbus::fdo::Result<PropertyItem> {
-        self.program
-            .menu(&self.state)
+        let menuitem: MenuItem = self.program.menu(&self.state).into();
+        menuitem
             .get_property(id, name)
             .ok_or(zbus::fdo::Error::Failed("Unfounded".to_string()))
     }

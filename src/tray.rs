@@ -1,7 +1,7 @@
 use crate::{
     dbusmenu::{
         AboutToShowFn, AboutToShowGroupFn, DBusMenuBootFn, DBusMenuInstance, DBusMenuItem,
-        EventUpdate, IconThemePathFn, MenuFn, MenuItem, MenuStatus, MenuStatusFn, OnClickedFn,
+        EventUpdate, IconThemePathFn, MenuFn, MenuStatus, MenuStatusFn, MenuUnit, OnClickedFn,
         OnToggledFn, RevisionFn, TextDirectionFn, ToggleState,
     },
     status_notifier_item::{
@@ -1917,6 +1917,7 @@ fn with_menu_status<M: DBusMenuItem>(
         MenuStatusFn: self::MenuStatusFn<M::State>,
     {
         type State = M::State;
+        type Message = M::Message;
 
         fn boot(&self) -> Self::State {
             self.program.boot()
@@ -1924,7 +1925,7 @@ fn with_menu_status<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuItem {
+        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
             self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -1979,6 +1980,7 @@ fn with_on_clicked<M: DBusMenuItem>(
         OnClickedFn: self::OnClickedFn<M::State>,
     {
         type State = M::State;
+        type Message = M::Message;
 
         fn boot(&self) -> Self::State {
             self.program.boot()
@@ -1986,7 +1988,7 @@ fn with_on_clicked<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuItem {
+        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
             self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2031,7 +2033,7 @@ fn with_on_clicked<M: DBusMenuItem>(
 fn with_on_toggled<M: DBusMenuItem>(
     program: M,
     on_toggled: impl OnToggledFn<M::State>,
-) -> impl DBusMenuItem<State = M::State> {
+) -> impl DBusMenuItem<State = M::State, Message = M::Message> {
     struct WithOnToggled<M, OnToggledFn> {
         program: M,
         on_toggled: OnToggledFn,
@@ -2042,6 +2044,7 @@ fn with_on_toggled<M: DBusMenuItem>(
         OnToggledFn: self::OnToggledFn<M::State>,
     {
         type State = M::State;
+        type Message = M::Message;
 
         fn boot(&self) -> Self::State {
             self.program.boot()
@@ -2049,7 +2052,7 @@ fn with_on_toggled<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuItem {
+        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
             self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2091,7 +2094,7 @@ fn with_on_toggled<M: DBusMenuItem>(
 fn with_text_direction<M: DBusMenuItem>(
     program: M,
     text_direction: impl TextDirectionFn<M::State>,
-) -> impl DBusMenuItem<State = M::State> {
+) -> impl DBusMenuItem<State = M::State, Message = M::Message> {
     struct WithTextDirection<M, TextDirectionFn> {
         program: M,
         text_direction: TextDirectionFn,
@@ -2102,6 +2105,7 @@ fn with_text_direction<M: DBusMenuItem>(
         TextDirectionFn: self::TextDirectionFn<M::State>,
     {
         type State = M::State;
+        type Message = M::Message;
 
         fn boot(&self) -> Self::State {
             self.program.boot()
@@ -2109,7 +2113,7 @@ fn with_text_direction<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuItem {
+        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
             self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2154,7 +2158,7 @@ fn with_text_direction<M: DBusMenuItem>(
 fn with_menu_icon_theme_path<M: DBusMenuItem>(
     program: M,
     icon_theme_path: impl IconThemePathFn<M::State>,
-) -> impl DBusMenuItem<State = M::State> {
+) -> impl DBusMenuItem<State = M::State, Message = M::Message> {
     struct WithIconThemePath<M, IconThemePathFn> {
         program: M,
         icon_theme_path: IconThemePathFn,
@@ -2165,6 +2169,7 @@ fn with_menu_icon_theme_path<M: DBusMenuItem>(
         IconThemePathFn: self::IconThemePathFn<M::State>,
     {
         type State = M::State;
+        type Message = M::Message;
 
         fn boot(&self) -> Self::State {
             self.program.boot()
@@ -2172,7 +2177,7 @@ fn with_menu_icon_theme_path<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuItem {
+        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
             self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2216,7 +2221,7 @@ fn with_menu_icon_theme_path<M: DBusMenuItem>(
 fn with_about_to_show<M: DBusMenuItem>(
     program: M,
     about_to_show: impl AboutToShowFn<M::State>,
-) -> impl DBusMenuItem<State = M::State> {
+) -> impl DBusMenuItem<State = M::State, Message = M::Message> {
     struct WithAboutToShow<M, AboutToShowFn> {
         program: M,
         about_to_show: AboutToShowFn,
@@ -2227,6 +2232,7 @@ fn with_about_to_show<M: DBusMenuItem>(
         AboutToShowFn: self::AboutToShowFn<M::State>,
     {
         type State = M::State;
+        type Message = M::Message;
 
         fn boot(&self) -> Self::State {
             self.program.boot()
@@ -2234,7 +2240,7 @@ fn with_about_to_show<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuItem {
+        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
             self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2278,7 +2284,7 @@ fn with_about_to_show<M: DBusMenuItem>(
 fn with_about_to_show_group<M: DBusMenuItem>(
     program: M,
     about_to_show_group: impl AboutToShowGroupFn<M::State>,
-) -> impl DBusMenuItem<State = M::State> {
+) -> impl DBusMenuItem<State = M::State, Message = M::Message> {
     struct WithAboutToShowGroup<M, AboutToShowGroupFn> {
         program: M,
         about_to_show_group: AboutToShowGroupFn,
@@ -2290,6 +2296,7 @@ fn with_about_to_show_group<M: DBusMenuItem>(
         AboutToShowGroupFn: self::AboutToShowGroupFn<M::State>,
     {
         type State = M::State;
+        type Message = M::Message;
 
         fn boot(&self) -> Self::State {
             self.program.boot()
@@ -2297,7 +2304,7 @@ fn with_about_to_show_group<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuItem {
+        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
             self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2340,15 +2347,18 @@ fn with_about_to_show_group<M: DBusMenuItem>(
 }
 
 // NOTE: main function
-pub fn tray<State, MenuState>(
+pub fn tray<State, MenuState, Message>(
     boot: impl NotifierBootFn<State>,
     id: impl IdFn,
     title: impl TitleFn<State>,
 
     menu_boot: impl DBusMenuBootFn<MenuState>,
-    menu: impl MenuFn<MenuState>,
+    menu: impl MenuFn<MenuState, Message>,
     revision: impl RevisionFn<MenuState>,
-) -> Tray<impl StatusNotifierItem<State = State>, impl DBusMenuItem<State = MenuState>>
+) -> Tray<
+    impl StatusNotifierItem<State = State>,
+    impl DBusMenuItem<State = MenuState, Message = Message>,
+>
 where
     State: 'static + Send + Sync,
 {
@@ -2377,21 +2387,23 @@ where
             self.title.title(state)
         }
     }
-    struct MenuInstance<MenuState, MenuBootFn, MenuFn, RevisionFn> {
+    struct MenuInstance<MenuState, Message, MenuBootFn, MenuFn, RevisionFn> {
         boot: MenuBootFn,
         menu: MenuFn,
         revision: RevisionFn,
         _state: PhantomData<MenuState>,
+        _message: PhantomData<Message>,
     }
 
-    impl<MenuState, MenuBootFn, MenuFn, RevisionFn> DBusMenuItem
-        for MenuInstance<MenuState, MenuBootFn, MenuFn, RevisionFn>
+    impl<MenuState, Message, MenuBootFn, MenuFn, RevisionFn> DBusMenuItem
+        for MenuInstance<MenuState, Message, MenuBootFn, MenuFn, RevisionFn>
     where
         MenuBootFn: self::DBusMenuBootFn<MenuState>,
-        MenuFn: self::MenuFn<MenuState>,
+        MenuFn: self::MenuFn<MenuState, Message>,
         RevisionFn: self::RevisionFn<MenuState>,
     {
         type State = MenuState;
+        type Message = Message;
 
         fn boot(&self) -> Self::State {
             self.boot.boot()
@@ -2399,7 +2411,7 @@ where
         fn revision(&self, state: &Self::State) -> u32 {
             self.revision.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuItem {
+        fn menu(&self, state: &Self::State) -> MenuUnit<Message> {
             self.menu.menu(state)
         }
     }
@@ -2415,6 +2427,7 @@ where
             menu,
             revision,
             _state: PhantomData,
+            _message: PhantomData,
         },
     }
 }

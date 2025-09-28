@@ -1,7 +1,7 @@
 use libappindicator_zbus::{
     tray,
     utils::{
-        Category, EventUpdate, MenuItem, MenuProperty, MenuStatus, TextDirection, ToggleState,
+        Category, EventUpdate, MenuProperty, MenuStatus, MenuUnit, TextDirection, ToggleState,
         ToggleType,
     },
 };
@@ -30,31 +30,40 @@ impl Base {
     }
 }
 
+#[derive(Clone, Copy)]
+struct Message;
+
 struct Menu {
-    menu: MenuItem,
+    menu: MenuUnit<Message>,
 }
 
 impl Menu {
     fn boot() -> Self {
-        let menu = MenuItem::new(MenuProperty::submenu())
-            .push_sub_menu(MenuItem::new(MenuProperty {
-                label: Some("Hello".to_owned()),
-                icon_name: Some("input-method".to_owned()),
-                enabled: Some(true),
-                toggle_type: Some(ToggleType::Radio),
-                toggle_state: Some(ToggleState::UnSelected),
-                ..Default::default()
-            }))
-            .push_sub_menu(MenuItem::new(MenuProperty {
-                label: Some("World".to_owned()),
-                icon_name: Some("fcitx_pinyin".to_owned()),
-                enabled: Some(true),
-                ..Default::default()
-            }));
+        let menu = MenuUnit::new(MenuProperty::submenu(), Message)
+            .push_sub_menu(MenuUnit::new(
+                MenuProperty {
+                    label: Some("Hello".to_owned()),
+                    icon_name: Some("input-method".to_owned()),
+                    enabled: Some(true),
+                    toggle_type: Some(ToggleType::Radio),
+                    toggle_state: Some(ToggleState::UnSelected),
+                    ..Default::default()
+                },
+                Message,
+            ))
+            .push_sub_menu(MenuUnit::new(
+                MenuProperty {
+                    label: Some("World".to_owned()),
+                    icon_name: Some("fcitx_pinyin".to_owned()),
+                    enabled: Some(true),
+                    ..Default::default()
+                },
+                Message,
+            ));
         Menu { menu }
     }
 
-    fn menu(&self) -> MenuItem {
+    fn menu(&self) -> MenuUnit<Message> {
         self.menu.clone()
     }
     fn status(&self) -> MenuStatus {
