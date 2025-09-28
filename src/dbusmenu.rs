@@ -92,14 +92,15 @@ impl Deref for Id {
     }
 }
 
-pub struct MenuUnit<Message> {
+#[derive(Debug, Clone)]
+pub struct MenuUnit<Message: Clone> {
     pub id: Id,
     pub property: MenuProperty,
     pub sub_menus: Vec<MenuUnit<Message>>,
     pub message: Message,
 }
 
-impl<Message> From<MenuUnit<Message>> for MenuItem {
+impl<Message: Clone> From<MenuUnit<Message>> for MenuItem {
     fn from(value: MenuUnit<Message>) -> Self {
         let mut output = MenuItem {
             id: value.id,
@@ -113,21 +114,7 @@ impl<Message> From<MenuUnit<Message>> for MenuItem {
     }
 }
 
-impl<Message> Clone for MenuUnit<Message>
-where
-    Message: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            id: self.id.clone(),
-            property: self.property.clone(),
-            sub_menus: self.sub_menus.clone(),
-            message: self.message.clone(),
-        }
-    }
-}
-
-impl<Message> MenuUnit<Message> {
+impl<Message: Clone> MenuUnit<Message> {
     pub fn new(property: MenuProperty, message: Message) -> Self {
         Self {
             id: Id::unique(),
@@ -139,6 +126,18 @@ impl<Message> MenuUnit<Message> {
     pub fn push_sub_menu(mut self, menu: Self) -> Self {
         self.sub_menus.push(menu);
         self
+    }
+
+    pub fn find_menu_by_id(&self, id: i32) -> Option<&Self> {
+        if *self.id == id {
+            return Some(self);
+        }
+        for menu in &self.sub_menus {
+            if let Some(menu) = menu.find_menu_by_id(id) {
+                return Some(menu);
+            }
+        }
+        None
     }
 }
 
@@ -276,7 +275,7 @@ pub struct PropertyItem {
 
 pub trait DBusMenuItem {
     type State;
-    type Message;
+    type Message: Clone;
 
     fn boot(&self) -> Self::State;
 
@@ -304,16 +303,10 @@ pub trait DBusMenuItem {
     }
 
     #[allow(unused)]
-    fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
-        EventUpdate::None
-    }
-
-    #[allow(unused)]
-    fn on_toggled(
+    fn on_clicked(
         &self,
         state: &mut Self::State,
-        id: i32,
-        status: ToggleState,
+        message: Self::Message,
         timestamp: u32,
     ) -> EventUpdate {
         EventUpdate::None
@@ -398,11 +391,11 @@ impl<State> RevisionFn<State> for u32 {
     }
 }
 
-pub trait MenuFn<State, Message> {
+pub trait MenuFn<State, Message: Clone> {
     fn menu(&self, state: &State) -> MenuUnit<Message>;
 }
 
-impl<State, Message, F> MenuFn<State, Message> for F
+impl<State, Message: Clone, F> MenuFn<State, Message> for F
 where
     F: Fn(&State) -> MenuUnit<Message>,
 {
@@ -411,41 +404,16 @@ where
     }
 }
 
-pub trait OnClickedFn<State> {
-    fn on_clicked(&self, state: &mut State, id: i32, timestamp: u32) -> EventUpdate;
+pub trait OnClickedFn<State, Message> {
+    fn on_clicked(&self, state: &mut State, message: Message, timestamp: u32) -> EventUpdate;
 }
 
-impl<T, State> OnClickedFn<State> for T
+impl<T, State, Message> OnClickedFn<State, Message> for T
 where
-    T: Fn(&mut State, i32, u32) -> EventUpdate,
+    T: Fn(&mut State, Message, u32) -> EventUpdate,
 {
-    fn on_clicked(&self, state: &mut State, id: i32, timestamp: u32) -> EventUpdate {
-        self(state, id, timestamp)
-    }
-}
-
-pub trait OnToggledFn<State> {
-    fn on_toggled(
-        &self,
-        state: &mut State,
-        id: i32,
-        status: ToggleState,
-        timestamp: u32,
-    ) -> EventUpdate;
-}
-
-impl<T, State> OnToggledFn<State> for T
-where
-    T: Fn(&mut State, i32, ToggleState, u32) -> EventUpdate,
-{
-    fn on_toggled(
-        &self,
-        state: &mut State,
-        id: i32,
-        status: ToggleState,
-        timestamp: u32,
-    ) -> EventUpdate {
-        self(state, id, status, timestamp)
+    fn on_clicked(&self, state: &mut State, message: Message, timestamp: u32) -> EventUpdate {
+        self(state, message, timestamp)
     }
 }
 
@@ -513,6 +481,7 @@ impl<Menu: DBusMenuItem> DBusMenuInstance<Menu>
 where
     Menu: Send + Sync + 'static,
     Menu::State: 'static + Send + Sync,
+    Menu::Message: 'static + Send + Sync + Clone,
 {
     fn about_to_show(&mut self, id: i32) -> zbus::fdo::Result<bool> {
         self.program.about_to_show(&mut self.state, id)
@@ -578,18 +547,18 @@ where
         &mut self,
         id: i32,
         event_id: String,
-        data: zbus::zvariant::OwnedValue,
+        _data: zbus::zvariant::OwnedValue,
         timestamp: u32,
         #[zbus(object_server)] server: &zbus::ObjectServer,
     ) -> zbus::fdo::Result<()> {
+        let menu = self.program.menu(&self.state);
+        let Some(button) = menu.find_menu_by_id(id) else {
+            return Ok(());
+        };
         let need_update = match event_id.as_str() {
-            "clicked" => self.program.on_clicked(&mut self.state, id, timestamp),
-            "toggled" => {
-                let status: ToggleState = data
-                    .try_into()
-                    .map_err(|e| zbus::fdo::Error::Failed(format!("data error: {e}")))?;
+            "clicked" => {
                 self.program
-                    .on_toggled(&mut self.state, id, status, timestamp)
+                    .on_clicked(&mut self.state, button.message.clone(), timestamp)
             }
             _ => EventUpdate::None,
         };
@@ -614,15 +583,16 @@ where
         #[zbus(object_server)] server: &zbus::ObjectServer,
     ) -> zbus::fdo::Result<Vec<i32>> {
         let mut output = vec![];
-        for (id, event_id, data, timestamp) in events {
+        for (id, event_id, _data, timestamp) in events {
+            let menu = self.program.menu(&self.state);
+            let Some(button) = menu.find_menu_by_id(id) else {
+                continue;
+            };
+
             let need_update = match event_id.as_str() {
-                "clicked" => self.program.on_clicked(&mut self.state, id, timestamp),
-                "toggled" => {
-                    let status: ToggleState = data
-                        .try_into()
-                        .map_err(|e| zbus::fdo::Error::Failed(format!("data error: {e}")))?;
+                "clicked" => {
                     self.program
-                        .on_toggled(&mut self.state, id, status, timestamp)
+                        .on_clicked(&mut self.state, button.message.clone(), timestamp)
                 }
                 _ => {
                     continue;

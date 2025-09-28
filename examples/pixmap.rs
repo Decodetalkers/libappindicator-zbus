@@ -83,7 +83,7 @@ impl Menu {
         MenuStatus::Normal
     }
 
-    fn on_clicked(&mut self, _id: i32, _timestamp: u32) -> EventUpdate {
+    fn on_clicked(&mut self, _message: Message, _timestamp: u32) -> EventUpdate {
         println!("Yes, here!");
         EventUpdate::None
     }

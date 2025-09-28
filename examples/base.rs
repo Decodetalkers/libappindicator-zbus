@@ -30,8 +30,11 @@ impl Base {
     }
 }
 
-#[derive(Clone, Copy)]
-struct Message;
+#[derive(Debug, Clone, Copy)]
+enum Message {
+    Clicked,
+    Toggled,
+}
 
 struct Menu {
     menu: MenuUnit<Message>,
@@ -39,7 +42,7 @@ struct Menu {
 
 impl Menu {
     fn boot() -> Self {
-        let menu = MenuUnit::new(MenuProperty::submenu(), Message)
+        let menu = MenuUnit::new(MenuProperty::submenu(), Message::Toggled)
             .push_sub_menu(MenuUnit::new(
                 MenuProperty {
                     label: Some("Hello".to_owned()),
@@ -49,7 +52,7 @@ impl Menu {
                     toggle_state: Some(ToggleState::UnSelected),
                     ..Default::default()
                 },
-                Message,
+                Message::Clicked,
             ))
             .push_sub_menu(MenuUnit::new(
                 MenuProperty {
@@ -58,7 +61,7 @@ impl Menu {
                     enabled: Some(true),
                     ..Default::default()
                 },
-                Message,
+                Message::Toggled,
             ));
         Menu { menu }
     }
@@ -70,13 +73,8 @@ impl Menu {
         MenuStatus::Normal
     }
 
-    fn on_clicked(&mut self, _id: i32, _timestamp: u32) -> EventUpdate {
-        println!("Yes, here!");
-        EventUpdate::None
-    }
-
-    fn on_toggled(&mut self, id: i32, status: ToggleState, timestamp: u32) -> EventUpdate {
-        println!("toggled, id = {id}, status = {status:?}, timestamp = {timestamp}");
+    fn on_clicked(&mut self, message: Message, _timestamp: u32) -> EventUpdate {
+        println!("message: {message:?}");
         EventUpdate::None
     }
 }
@@ -95,7 +93,6 @@ async fn main() {
         //.with_get_group_properties(Menu::get_group_properties)
         .with_menu_status(Menu::status)
         .with_on_clicked(Menu::on_clicked)
-        .with_on_toggled(Menu::on_toggled)
         .run()
         .await
         .unwrap();
