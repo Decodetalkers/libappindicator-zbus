@@ -358,7 +358,15 @@ where
             menu_raw: with_menu_icon_theme_path(self.menu_raw, f),
         }
     }
-
+    pub fn with_about_to_show(
+        self,
+        f: impl AboutToShowFn<M::State>,
+    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
+        Tray {
+            notifier_raw: self.notifier_raw,
+            menu_raw: with_about_to_show(self.menu_raw, f),
+        }
+    }
     pub fn with_about_to_show_group(
         self,
         f: impl AboutToShowGroupFn<M::State>,
@@ -2205,7 +2213,68 @@ fn with_menu_icon_theme_path<M: DBusMenuItem>(
         icon_theme_path,
     }
 }
+fn with_about_to_show<M: DBusMenuItem>(
+    program: M,
+    about_to_show: impl AboutToShowFn<M::State>,
+) -> impl DBusMenuItem<State = M::State> {
+    struct WithAboutToShow<M, AboutToShowFn> {
+        program: M,
+        about_to_show: AboutToShowFn,
+    }
 
+    impl<M: DBusMenuItem, AboutToShowFn> DBusMenuItem for WithAboutToShow<M, AboutToShowFn>
+    where
+        AboutToShowFn: self::AboutToShowFn<M::State>,
+    {
+        type State = M::State;
+
+        fn boot(&self) -> Self::State {
+            self.program.boot()
+        }
+        fn revision(&self, state: &Self::State) -> u32 {
+            self.program.revision(state)
+        }
+        fn menu(&self, state: &Self::State) -> MenuItem {
+            self.program.menu(state)
+        }
+        fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
+            Ok(self.about_to_show.about_to_show(state, id))
+        }
+        fn about_to_show_group(
+            &self,
+            state: &mut Self::State,
+            ids: Vec<i32>,
+        ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+            self.program.about_to_show_group(state, ids)
+        }
+        fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
+            self.program.status(state)
+        }
+
+        fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
+            self.program.on_clicked(state, id, timestamp)
+        }
+        fn on_toggled(
+            &self,
+            state: &mut Self::State,
+            id: i32,
+            status: ToggleState,
+            timestamp: u32,
+        ) -> EventUpdate {
+            self.program.on_toggled(state, id, status, timestamp)
+        }
+        fn text_direction(&self, state: &Self::State) -> TextDirection {
+            self.program.text_direction(state)
+        }
+        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
+            self.program.icon_theme_path(state)
+        }
+    }
+    WithAboutToShow {
+        program,
+        about_to_show,
+    }
+}
 fn with_about_to_show_group<M: DBusMenuItem>(
     program: M,
     about_to_show_group: impl AboutToShowGroupFn<M::State>,
@@ -2279,7 +2348,6 @@ pub fn tray<State, MenuState>(
     menu_boot: impl DBusMenuBootFn<MenuState>,
     menu: impl MenuFn<MenuState>,
     revision: impl RevisionFn<MenuState>,
-    about_to_show: impl AboutToShowFn<MenuState>,
 ) -> Tray<impl StatusNotifierItem<State = State>, impl DBusMenuItem<State = MenuState>>
 where
     State: 'static + Send + Sync,
@@ -2309,26 +2377,22 @@ where
             self.title.title(state)
         }
     }
-    struct MenuInstance<MenuState, MenuBootFn, MenuFn, RevisionFn, AboutToShowFn> {
+    struct MenuInstance<MenuState, MenuBootFn, MenuFn, RevisionFn> {
         boot: MenuBootFn,
         menu: MenuFn,
         revision: RevisionFn,
-        about_to_show: AboutToShowFn,
         _state: PhantomData<MenuState>,
     }
 
-    impl<MenuState, MenuBootFn, MenuFn, RevisionFn, AboutToShowFn> DBusMenuItem
-        for MenuInstance<MenuState, MenuBootFn, MenuFn, RevisionFn, AboutToShowFn>
+    impl<MenuState, MenuBootFn, MenuFn, RevisionFn> DBusMenuItem
+        for MenuInstance<MenuState, MenuBootFn, MenuFn, RevisionFn>
     where
         MenuBootFn: self::DBusMenuBootFn<MenuState>,
         MenuFn: self::MenuFn<MenuState>,
-        AboutToShowFn: self::AboutToShowFn<MenuState>,
         RevisionFn: self::RevisionFn<MenuState>,
     {
         type State = MenuState;
-        fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
-            self.about_to_show.about_to_show(state, id)
-        }
+
         fn boot(&self) -> Self::State {
             self.boot.boot()
         }
@@ -2350,7 +2414,6 @@ where
             boot: menu_boot,
             menu,
             revision,
-            about_to_show,
             _state: PhantomData,
         },
     }

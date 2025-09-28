@@ -54,9 +54,6 @@ impl Menu {
         Menu { menu }
     }
 
-    fn about_to_show(&mut self, _id: i32) -> Result<bool> {
-        Ok(true)
-    }
     fn menu(&self) -> MenuItem {
         self.menu.clone()
     }
@@ -77,30 +74,22 @@ impl Menu {
 
 #[tokio::main]
 async fn main() {
-    let connection = tray(
-        Base::boot,
-        "hello",
-        "fake_nheko",
-        Menu::boot,
-        Menu::menu,
-        1,
-        Menu::about_to_show,
-    )
-    .with_item_is_menu(true)
-    .with_icon_name("nheko")
-    .with_activate(Base::activate)
-    .with_category(Category::ApplicationStatus)
-    .with_text_direction(TextDirection::Rtl)
-    .with_context_menu(Base::context_menu)
-    .with_scroll(Base::scroll)
-    .with_secondary_activate(Base::secondary_activate)
-    //.with_get_group_properties(Menu::get_group_properties)
-    .with_menu_status(Menu::status)
-    .with_on_clicked(Menu::on_clicked)
-    .with_on_toggled(Menu::on_toggled)
-    .run()
-    .await
-    .unwrap();
+    let connection = tray(Base::boot, "hello", "fake_nheko", Menu::boot, Menu::menu, 1)
+        .with_item_is_menu(false)
+        .with_icon_name("nheko")
+        .with_activate(Base::activate)
+        .with_category(Category::ApplicationStatus)
+        .with_text_direction(TextDirection::Rtl)
+        .with_context_menu(Base::context_menu)
+        .with_scroll(Base::scroll)
+        .with_secondary_activate(Base::secondary_activate)
+        //.with_get_group_properties(Menu::get_group_properties)
+        .with_menu_status(Menu::status)
+        .with_on_clicked(Menu::on_clicked)
+        .with_on_toggled(Menu::on_toggled)
+        .run()
+        .await
+        .unwrap();
 
     println!("{:?}", connection.unique_name());
     std::future::pending::<()>().await;

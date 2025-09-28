@@ -65,10 +65,6 @@ impl Menu {
             }));
         Menu { menu }
     }
-    fn about_to_show(&mut self, id: i32) -> Result<bool> {
-        println!("about {id}");
-        Ok(true)
-    }
 
     fn menu(&self) -> MenuItem {
         self.menu.clone()
@@ -93,9 +89,8 @@ async fn main() {
         Menu::boot,
         Menu::menu,
         1,
-        Menu::about_to_show,
     )
-    .with_item_is_menu(true)
+    .with_item_is_menu(false)
     .with_icon_pixmap(Base::icon_pixmap)
     .with_activate(Base::activate)
     .with_category(Category::ApplicationStatus)

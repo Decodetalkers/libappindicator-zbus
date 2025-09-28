@@ -233,7 +233,10 @@ pub trait DBusMenuItem {
 
     fn revision(&self, state: &Self::State) -> u32;
 
-    fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool>;
+    #[allow(unused)]
+    fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
+        Err(zbus::fdo::Error::Failed("Unimplemented".to_string()))
+    }
 
     /// AboutToShowGroup method
     #[allow(unused)]
@@ -307,14 +310,14 @@ where
     }
 }
 pub trait AboutToShowFn<State> {
-    fn about_to_show(&self, state: &mut State, id: i32) -> zbus::fdo::Result<bool>;
+    fn about_to_show(&self, state: &mut State, id: i32) -> bool;
 }
 
 impl<T, State> AboutToShowFn<State> for T
 where
-    T: Fn(&mut State, i32) -> zbus::fdo::Result<bool>,
+    T: Fn(&mut State, i32) -> bool,
 {
-    fn about_to_show(&self, state: &mut State, id: i32) -> zbus::fdo::Result<bool> {
+    fn about_to_show(&self, state: &mut State, id: i32) -> bool {
         self(state, id)
     }
 }
