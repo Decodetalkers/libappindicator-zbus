@@ -1,9 +1,8 @@
 use crate::{
     dbusmenu::{
         AboutToShowFn, AboutToShowGroupFn, DBusMenuBootFn, DBusMenuInstance, DBusMenuItem,
-        EventUpdate, GetGroupPropertiesFn, GetLayoutFn, GetPropertyFn, IconThemePathFn, MenuItem,
-        MenuStatus, MenuStatusFn, OnClickedFn, OnToggledFn, PropertyItem, TextDirectionFn,
-        ToggleState,
+        EventUpdate, IconThemePathFn, MenuFn, MenuItem, MenuStatus, MenuStatusFn, OnClickedFn,
+        OnToggledFn, RevisionFn, TextDirectionFn, ToggleState,
     },
     status_notifier_item::{
         ActivateFn, AttentionIconNameFn, AttentionIconPixmapFn, AttentionMovieNameFn, CategoryFn,
@@ -307,36 +306,6 @@ where
         Tray {
             notifier_raw: with_context_menu(self.notifier_raw, f),
             menu_raw: self.menu_raw,
-        }
-    }
-
-    pub fn with_layout(
-        self,
-        f: impl GetLayoutFn<M::State>,
-    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
-        Tray {
-            notifier_raw: self.notifier_raw,
-            menu_raw: with_layout(self.menu_raw, f),
-        }
-    }
-
-    pub fn with_get_property(
-        self,
-        f: impl GetPropertyFn<M::State>,
-    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
-        Tray {
-            notifier_raw: self.notifier_raw,
-            menu_raw: with_get_property(self.menu_raw, f),
-        }
-    }
-
-    pub fn with_get_group_properties(
-        self,
-        f: impl GetGroupPropertiesFn<M::State>,
-    ) -> Tray<impl StatusNotifierItem<State = P::State>, impl DBusMenuItem<State = M::State>> {
-        Tray {
-            notifier_raw: self.notifier_raw,
-            menu_raw: with_get_group_properties(self.menu_raw, f),
         }
     }
 
@@ -1926,253 +1895,6 @@ fn with_window_id<P: StatusNotifierItem>(
     WithWindowId { program, window_id }
 }
 
-// NOTE: this part is for menu
-fn with_layout<M: DBusMenuItem>(
-    program: M,
-    get_layout: impl GetLayoutFn<M::State>,
-) -> impl DBusMenuItem<State = M::State> {
-    struct WithLayout<M, GetLayout> {
-        program: M,
-        get_layout: GetLayout,
-    }
-
-    impl<M: DBusMenuItem, GetLayout> DBusMenuItem for WithLayout<M, GetLayout>
-    where
-        GetLayout: self::GetLayoutFn<M::State>,
-    {
-        type State = M::State;
-        fn get_layout(
-            &self,
-            state: &mut Self::State,
-            parent_id: i32,
-            recursion_depth: i32,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<(u32, MenuItem)> {
-            self.get_layout
-                .get_layout(state, parent_id, recursion_depth, property_names)
-        }
-        fn boot(&self) -> Self::State {
-            self.program.boot()
-        }
-        fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
-            self.program.about_to_show(state, id)
-        }
-        fn about_to_show_group(
-            &self,
-            state: &mut Self::State,
-            ids: Vec<i32>,
-        ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
-            self.program.about_to_show_group(state, ids)
-        }
-        fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
-            self.program.status(state)
-        }
-        fn get_group_properties(
-            &self,
-            state: &mut Self::State,
-            ids: Vec<i32>,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-            self.program
-                .get_group_properties(state, ids, property_names)
-        }
-        fn get_property(
-            &self,
-            state: &mut Self::State,
-            id: i32,
-            name: String,
-        ) -> zbus::fdo::Result<PropertyItem> {
-            self.program.get_property(state, id, name)
-        }
-        fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
-            self.program.on_clicked(state, id, timestamp)
-        }
-        fn on_toggled(
-            &self,
-            state: &mut Self::State,
-            id: i32,
-            status: ToggleState,
-            timestamp: u32,
-        ) -> EventUpdate {
-            self.program.on_toggled(state, id, status, timestamp)
-        }
-        fn text_direction(&self, state: &Self::State) -> TextDirection {
-            self.program.text_direction(state)
-        }
-        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
-            self.program.icon_theme_path(state)
-        }
-    }
-    WithLayout {
-        program,
-        get_layout,
-    }
-}
-fn with_get_property<M: DBusMenuItem>(
-    program: M,
-    get_property: impl GetPropertyFn<M::State>,
-) -> impl DBusMenuItem<State = M::State> {
-    struct WithGetProperty<M, GetPropertyFn> {
-        program: M,
-        get_property: GetPropertyFn,
-    }
-
-    impl<M: DBusMenuItem, GetPropertyFn> DBusMenuItem for WithGetProperty<M, GetPropertyFn>
-    where
-        GetPropertyFn: self::GetPropertyFn<M::State>,
-    {
-        type State = M::State;
-        fn get_layout(
-            &self,
-            state: &mut Self::State,
-            parent_id: i32,
-            recursion_depth: i32,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<(u32, MenuItem)> {
-            self.program
-                .get_layout(state, parent_id, recursion_depth, property_names)
-        }
-        fn boot(&self) -> Self::State {
-            self.program.boot()
-        }
-        fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
-            self.program.about_to_show(state, id)
-        }
-        fn about_to_show_group(
-            &self,
-            state: &mut Self::State,
-            ids: Vec<i32>,
-        ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
-            self.program.about_to_show_group(state, ids)
-        }
-        fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
-            self.program.status(state)
-        }
-        fn get_group_properties(
-            &self,
-            state: &mut Self::State,
-            ids: Vec<i32>,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-            self.program
-                .get_group_properties(state, ids, property_names)
-        }
-        fn get_property(
-            &self,
-            state: &mut Self::State,
-            id: i32,
-            name: String,
-        ) -> zbus::fdo::Result<PropertyItem> {
-            self.get_property.get_property(state, id, name)
-        }
-        fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
-            self.program.on_clicked(state, id, timestamp)
-        }
-        fn on_toggled(
-            &self,
-            state: &mut Self::State,
-            id: i32,
-            status: ToggleState,
-            timestamp: u32,
-        ) -> EventUpdate {
-            self.program.on_toggled(state, id, status, timestamp)
-        }
-        fn text_direction(&self, state: &Self::State) -> TextDirection {
-            self.program.text_direction(state)
-        }
-        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
-            self.program.icon_theme_path(state)
-        }
-    }
-    WithGetProperty {
-        program,
-        get_property,
-    }
-}
-
-fn with_get_group_properties<M: DBusMenuItem>(
-    program: M,
-    get_group_properties: impl GetGroupPropertiesFn<M::State>,
-) -> impl DBusMenuItem<State = M::State> {
-    struct WithGetGroupProperties<M, GetGroupProperties> {
-        program: M,
-        get_group_properties: GetGroupProperties,
-    }
-
-    impl<M: DBusMenuItem, GetGroupProperties> DBusMenuItem
-        for WithGetGroupProperties<M, GetGroupProperties>
-    where
-        GetGroupProperties: self::GetGroupPropertiesFn<M::State>,
-    {
-        type State = M::State;
-        fn get_layout(
-            &self,
-            state: &mut Self::State,
-            parent_id: i32,
-            recursion_depth: i32,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<(u32, MenuItem)> {
-            self.program
-                .get_layout(state, parent_id, recursion_depth, property_names)
-        }
-        fn boot(&self) -> Self::State {
-            self.program.boot()
-        }
-        fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
-            self.program.about_to_show(state, id)
-        }
-        fn about_to_show_group(
-            &self,
-            state: &mut Self::State,
-            ids: Vec<i32>,
-        ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
-            self.program.about_to_show_group(state, ids)
-        }
-        fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
-            self.program.status(state)
-        }
-        fn get_group_properties(
-            &self,
-            state: &mut Self::State,
-            ids: Vec<i32>,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-            self.get_group_properties
-                .get_group_properties(state, ids, property_names)
-        }
-        fn get_property(
-            &self,
-            state: &mut Self::State,
-            id: i32,
-            name: String,
-        ) -> zbus::fdo::Result<PropertyItem> {
-            self.program.get_property(state, id, name)
-        }
-        fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
-            self.program.on_clicked(state, id, timestamp)
-        }
-        fn on_toggled(
-            &self,
-            state: &mut Self::State,
-            id: i32,
-            status: ToggleState,
-            timestamp: u32,
-        ) -> EventUpdate {
-            self.program.on_toggled(state, id, status, timestamp)
-        }
-        fn text_direction(&self, state: &Self::State) -> TextDirection {
-            self.program.text_direction(state)
-        }
-        fn icon_theme_path(&self, state: &Self::State) -> Vec<String> {
-            self.program.icon_theme_path(state)
-        }
-    }
-    WithGetGroupProperties {
-        program,
-        get_group_properties,
-    }
-}
-
 fn with_menu_status<M: DBusMenuItem>(
     program: M,
     menu_status: impl MenuStatusFn<M::State>,
@@ -2187,18 +1909,15 @@ fn with_menu_status<M: DBusMenuItem>(
         MenuStatusFn: self::MenuStatusFn<M::State>,
     {
         type State = M::State;
-        fn get_layout(
-            &self,
-            state: &mut Self::State,
-            parent_id: i32,
-            recursion_depth: i32,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<(u32, MenuItem)> {
-            self.program
-                .get_layout(state, parent_id, recursion_depth, property_names)
-        }
+
         fn boot(&self) -> Self::State {
             self.program.boot()
+        }
+        fn revision(&self, state: &Self::State) -> u32 {
+            self.program.revision(state)
+        }
+        fn menu(&self, state: &Self::State) -> MenuItem {
+            self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
@@ -2213,23 +1932,7 @@ fn with_menu_status<M: DBusMenuItem>(
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             Ok(self.menu_status.status(state))
         }
-        fn get_group_properties(
-            &self,
-            state: &mut Self::State,
-            ids: Vec<i32>,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-            self.program
-                .get_group_properties(state, ids, property_names)
-        }
-        fn get_property(
-            &self,
-            state: &mut Self::State,
-            id: i32,
-            name: String,
-        ) -> zbus::fdo::Result<PropertyItem> {
-            self.program.get_property(state, id, name)
-        }
+
         fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
             self.program.on_clicked(state, id, timestamp)
         }
@@ -2268,18 +1971,15 @@ fn with_on_clicked<M: DBusMenuItem>(
         OnClickedFn: self::OnClickedFn<M::State>,
     {
         type State = M::State;
-        fn get_layout(
-            &self,
-            state: &mut Self::State,
-            parent_id: i32,
-            recursion_depth: i32,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<(u32, MenuItem)> {
-            self.program
-                .get_layout(state, parent_id, recursion_depth, property_names)
-        }
+
         fn boot(&self) -> Self::State {
             self.program.boot()
+        }
+        fn revision(&self, state: &Self::State) -> u32 {
+            self.program.revision(state)
+        }
+        fn menu(&self, state: &Self::State) -> MenuItem {
+            self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
@@ -2294,23 +1994,7 @@ fn with_on_clicked<M: DBusMenuItem>(
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             self.program.status(state)
         }
-        fn get_group_properties(
-            &self,
-            state: &mut Self::State,
-            ids: Vec<i32>,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-            self.program
-                .get_group_properties(state, ids, property_names)
-        }
-        fn get_property(
-            &self,
-            state: &mut Self::State,
-            id: i32,
-            name: String,
-        ) -> zbus::fdo::Result<PropertyItem> {
-            self.program.get_property(state, id, name)
-        }
+
         fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
             self.on_clicked.on_clicked(state, id, timestamp)
         }
@@ -2350,18 +2034,15 @@ fn with_on_toggled<M: DBusMenuItem>(
         OnToggledFn: self::OnToggledFn<M::State>,
     {
         type State = M::State;
-        fn get_layout(
-            &self,
-            state: &mut Self::State,
-            parent_id: i32,
-            recursion_depth: i32,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<(u32, MenuItem)> {
-            self.program
-                .get_layout(state, parent_id, recursion_depth, property_names)
-        }
+
         fn boot(&self) -> Self::State {
             self.program.boot()
+        }
+        fn revision(&self, state: &Self::State) -> u32 {
+            self.program.revision(state)
+        }
+        fn menu(&self, state: &Self::State) -> MenuItem {
+            self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
@@ -2376,23 +2057,7 @@ fn with_on_toggled<M: DBusMenuItem>(
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             self.program.status(state)
         }
-        fn get_group_properties(
-            &self,
-            state: &mut Self::State,
-            ids: Vec<i32>,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-            self.program
-                .get_group_properties(state, ids, property_names)
-        }
-        fn get_property(
-            &self,
-            state: &mut Self::State,
-            id: i32,
-            name: String,
-        ) -> zbus::fdo::Result<PropertyItem> {
-            self.program.get_property(state, id, name)
-        }
+
         fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
             self.program.on_clicked(state, id, timestamp)
         }
@@ -2429,18 +2094,15 @@ fn with_text_direction<M: DBusMenuItem>(
         TextDirectionFn: self::TextDirectionFn<M::State>,
     {
         type State = M::State;
-        fn get_layout(
-            &self,
-            state: &mut Self::State,
-            parent_id: i32,
-            recursion_depth: i32,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<(u32, MenuItem)> {
-            self.program
-                .get_layout(state, parent_id, recursion_depth, property_names)
-        }
+
         fn boot(&self) -> Self::State {
             self.program.boot()
+        }
+        fn revision(&self, state: &Self::State) -> u32 {
+            self.program.revision(state)
+        }
+        fn menu(&self, state: &Self::State) -> MenuItem {
+            self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
@@ -2455,23 +2117,7 @@ fn with_text_direction<M: DBusMenuItem>(
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             self.program.status(state)
         }
-        fn get_group_properties(
-            &self,
-            state: &mut Self::State,
-            ids: Vec<i32>,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-            self.program
-                .get_group_properties(state, ids, property_names)
-        }
-        fn get_property(
-            &self,
-            state: &mut Self::State,
-            id: i32,
-            name: String,
-        ) -> zbus::fdo::Result<PropertyItem> {
-            self.program.get_property(state, id, name)
-        }
+
         fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
             self.program.on_clicked(state, id, timestamp)
         }
@@ -2511,18 +2157,15 @@ fn with_menu_icon_theme_path<M: DBusMenuItem>(
         IconThemePathFn: self::IconThemePathFn<M::State>,
     {
         type State = M::State;
-        fn get_layout(
-            &self,
-            state: &mut Self::State,
-            parent_id: i32,
-            recursion_depth: i32,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<(u32, MenuItem)> {
-            self.program
-                .get_layout(state, parent_id, recursion_depth, property_names)
-        }
+
         fn boot(&self) -> Self::State {
             self.program.boot()
+        }
+        fn revision(&self, state: &Self::State) -> u32 {
+            self.program.revision(state)
+        }
+        fn menu(&self, state: &Self::State) -> MenuItem {
+            self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
@@ -2537,23 +2180,7 @@ fn with_menu_icon_theme_path<M: DBusMenuItem>(
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             self.program.status(state)
         }
-        fn get_group_properties(
-            &self,
-            state: &mut Self::State,
-            ids: Vec<i32>,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-            self.program
-                .get_group_properties(state, ids, property_names)
-        }
-        fn get_property(
-            &self,
-            state: &mut Self::State,
-            id: i32,
-            name: String,
-        ) -> zbus::fdo::Result<PropertyItem> {
-            self.program.get_property(state, id, name)
-        }
+
         fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
             self.program.on_clicked(state, id, timestamp)
         }
@@ -2594,18 +2221,15 @@ fn with_about_to_show_group<M: DBusMenuItem>(
         AboutToShowGroupFn: self::AboutToShowGroupFn<M::State>,
     {
         type State = M::State;
-        fn get_layout(
-            &self,
-            state: &mut Self::State,
-            parent_id: i32,
-            recursion_depth: i32,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<(u32, MenuItem)> {
-            self.program
-                .get_layout(state, parent_id, recursion_depth, property_names)
-        }
+
         fn boot(&self) -> Self::State {
             self.program.boot()
+        }
+        fn revision(&self, state: &Self::State) -> u32 {
+            self.program.revision(state)
+        }
+        fn menu(&self, state: &Self::State) -> MenuItem {
+            self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
@@ -2620,24 +2244,7 @@ fn with_about_to_show_group<M: DBusMenuItem>(
         fn status(&self, state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
             self.program.status(state)
         }
-        fn get_group_properties(
-            &self,
-            state: &mut Self::State,
-            ids: Vec<i32>,
-            property_names: Vec<String>,
-        ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-            self.program
-                .get_group_properties(state, ids, property_names)
-        }
 
-        fn get_property(
-            &self,
-            state: &mut Self::State,
-            id: i32,
-            name: String,
-        ) -> zbus::fdo::Result<PropertyItem> {
-            self.program.get_property(state, id, name)
-        }
         fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
             self.program.on_clicked(state, id, timestamp)
         }
@@ -2670,6 +2277,8 @@ pub fn tray<State, MenuState>(
     title: impl TitleFn<State>,
 
     menu_boot: impl DBusMenuBootFn<MenuState>,
+    menu: impl MenuFn<MenuState>,
+    revision: impl RevisionFn<MenuState>,
     about_to_show: impl AboutToShowFn<MenuState>,
 ) -> Tray<impl StatusNotifierItem<State = State>, impl DBusMenuItem<State = MenuState>>
 where
@@ -2700,17 +2309,21 @@ where
             self.title.title(state)
         }
     }
-    struct MenuInstance<MenuState, MenuBootFn, AboutToShowFn> {
+    struct MenuInstance<MenuState, MenuBootFn, MenuFn, RevisionFn, AboutToShowFn> {
         boot: MenuBootFn,
+        menu: MenuFn,
+        revision: RevisionFn,
         about_to_show: AboutToShowFn,
         _state: PhantomData<MenuState>,
     }
 
-    impl<MenuState, MenuBootFn, AboutToShowFn> DBusMenuItem
-        for MenuInstance<MenuState, MenuBootFn, AboutToShowFn>
+    impl<MenuState, MenuBootFn, MenuFn, RevisionFn, AboutToShowFn> DBusMenuItem
+        for MenuInstance<MenuState, MenuBootFn, MenuFn, RevisionFn, AboutToShowFn>
     where
         MenuBootFn: self::DBusMenuBootFn<MenuState>,
+        MenuFn: self::MenuFn<MenuState>,
         AboutToShowFn: self::AboutToShowFn<MenuState>,
+        RevisionFn: self::RevisionFn<MenuState>,
     {
         type State = MenuState;
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2718,6 +2331,12 @@ where
         }
         fn boot(&self) -> Self::State {
             self.boot.boot()
+        }
+        fn revision(&self, state: &Self::State) -> u32 {
+            self.revision.revision(state)
+        }
+        fn menu(&self, state: &Self::State) -> MenuItem {
+            self.menu.menu(state)
         }
     }
     Tray {
@@ -2729,6 +2348,8 @@ where
         },
         menu_raw: MenuInstance {
             boot: menu_boot,
+            menu,
+            revision,
             about_to_show,
             _state: PhantomData,
         },

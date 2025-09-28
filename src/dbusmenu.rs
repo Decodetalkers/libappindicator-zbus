@@ -19,6 +19,9 @@
 //!
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
+use std::ops::Deref;
+use std::sync::atomic::{self, AtomicI32};
+
 use serde::{Deserialize, Serialize};
 use zbus::zvariant::{self, OwnedValue, Type, Value, as_value::optional};
 
@@ -71,9 +74,28 @@ impl MenuProperty {
 }
 
 #[derive(Type, Debug, Serialize, Deserialize, OwnedValue, Value, Clone)]
+pub struct Id(i32);
+
+static COUNT: AtomicI32 = AtomicI32::new(0);
+
+impl Id {
+    /// Creates a new unique window [`Id`].
+    pub fn unique() -> Id {
+        Id(COUNT.fetch_add(1, atomic::Ordering::Relaxed))
+    }
+}
+
+impl Deref for Id {
+    type Target = i32;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Type, Debug, Serialize, Deserialize, OwnedValue, Value, Clone)]
 #[zvariant(signature = "(ia{sv}av)")]
 pub struct MenuItem {
-    pub id: i32,
+    pub id: Id,
     pub property: MenuProperty,
     pub sub_menus: Vec<zvariant::OwnedValue>,
 }
@@ -90,7 +112,7 @@ pub enum MenuStatus {
 impl Default for MenuItem {
     fn default() -> Self {
         MenuItem {
-            id: 1,
+            id: Id::unique(),
             property: MenuProperty::submenu(),
             sub_menus: vec![],
         }
@@ -98,20 +120,64 @@ impl Default for MenuItem {
 }
 
 impl MenuItem {
-    pub fn new(id: i32, property: MenuProperty) -> Self {
+    pub fn new(property: MenuProperty) -> Self {
         MenuItem {
-            id,
+            id: Id::unique(),
             property,
             sub_menus: vec![],
         }
     }
+
+    #[allow(unused)]
+    pub fn get_filiter(
+        &self,
+        parent_id: i32,
+        recursion_depth: i32,
+        property_names: &[&str],
+    ) -> Option<MenuItem> {
+        if *self.id == parent_id {
+            let mut new_menu = MenuItem {
+                id: self.id.clone(),
+                property: self.property.clone(),
+                sub_menus: vec![],
+            };
+
+            let next_reversion_depth = recursion_depth - 1;
+            for menu in self.sub_menus.as_slice() {
+                let menu: MenuItem = menu.clone().try_into().unwrap();
+                let next_menu = menu.filiter(next_reversion_depth, property_names);
+                new_menu = new_menu.push_sub_menu(next_menu);
+            }
+
+            return Some(new_menu);
+        }
+        None
+    }
+
+    fn filiter(&self, recursion_depth: i32, property_names: &[&str]) -> MenuItem {
+        let mut new_menu = MenuItem {
+            id: self.id.clone(),
+            property: self.property.clone(),
+            sub_menus: vec![],
+        };
+
+        let next_reversion_depth = recursion_depth - 1;
+        for menu in self.sub_menus.as_slice() {
+            let menu: MenuItem = menu.clone().try_into().unwrap();
+            let next_menu = menu.filiter(next_reversion_depth, property_names);
+            new_menu = new_menu.push_sub_menu(next_menu);
+        }
+
+        new_menu
+    }
+
     pub fn push_sub_menu(mut self, menu: MenuItem) -> Self {
         self.sub_menus.push(OwnedValue::try_from(menu).unwrap());
         self
     }
 
-    pub fn get_property(&self, id: i32) -> Option<PropertyItem> {
-        if self.id == id {
+    pub fn get_property(&self, id: i32, name: String) -> Option<PropertyItem> {
+        if *self.id == id {
             return Some(PropertyItem {
                 id,
                 item: self.property.clone(),
@@ -124,7 +190,7 @@ impl MenuItem {
             .collect();
 
         for sub_menu in sub_menus {
-            let property = sub_menu.get_property(id);
+            let property = sub_menu.get_property(id, name.clone());
             if property.is_some() {
                 return property;
             }
@@ -133,22 +199,20 @@ impl MenuItem {
         None
     }
 
-    pub fn get_property_groups(&self, ids: Vec<i32>) -> Vec<PropertyItem> {
+    pub fn get_property_groups(
+        &self,
+        ids: Vec<i32>,
+        _property_names: Vec<String>,
+    ) -> Vec<PropertyItem> {
         let mut output = vec![];
         for id in ids {
-            if let Some(property) = self.get_property(id) {
+            if let Some(property) = self.get_property(id, "".to_string()) {
                 output.push(property);
             }
         }
 
         output
     }
-}
-
-#[derive(Type, Debug, Default, Serialize, Deserialize)]
-pub struct LayoutData {
-    pub revision: u32,
-    pub data: MenuItem,
 }
 
 #[derive(Type, Debug, Default, Serialize, Deserialize)]
@@ -162,6 +226,10 @@ pub trait DBusMenuItem {
 
     fn boot(&self) -> Self::State;
 
+    fn menu(&self, state: &Self::State) -> MenuItem;
+
+    fn revision(&self, state: &Self::State) -> u32;
+
     fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool>;
 
     /// AboutToShowGroup method
@@ -174,39 +242,8 @@ pub trait DBusMenuItem {
         Err(zbus::fdo::Error::Failed("Unimplemented".to_string()))
     }
 
-    #[allow(unused)]
-    fn get_layout(
-        &self,
-        state: &mut Self::State,
-        parent_id: i32,
-        recursion_depth: i32,
-        property_names: Vec<String>,
-    ) -> zbus::fdo::Result<(u32, MenuItem)> {
-        Ok((1, MenuItem::default()))
-    }
-
     fn status(&self, _state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
         Ok(MenuStatus::Normal)
-    }
-
-    #[allow(unused)]
-    fn get_group_properties(
-        &self,
-        state: &mut Self::State,
-        ids: Vec<i32>,
-        property_names: Vec<String>,
-    ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        Ok(vec![])
-    }
-
-    #[allow(unused)]
-    fn get_property(
-        &self,
-        state: &mut Self::State,
-        id: i32,
-        name: String,
-    ) -> zbus::fdo::Result<PropertyItem> {
-        Err(zbus::fdo::Error::Failed("Unimplemented".to_string()))
     }
 
     #[allow(unused)]
@@ -279,80 +316,42 @@ where
     }
 }
 
-pub trait GetLayoutFn<State> {
-    fn get_layout(
-        &self,
-        state: &mut State,
-        parent_id: i32,
-        recursion_depth: i32,
-        property_names: Vec<String>,
-    ) -> zbus::fdo::Result<(u32, MenuItem)>;
-}
-
-impl<T, State> GetLayoutFn<State> for T
-where
-    T: Fn(&mut State, i32, i32, Vec<String>) -> zbus::fdo::Result<(u32, MenuItem)>,
-{
-    fn get_layout(
-        &self,
-        state: &mut State,
-        parent_id: i32,
-        recursion_depth: i32,
-        property_names: Vec<String>,
-    ) -> zbus::fdo::Result<(u32, MenuItem)> {
-        self(state, parent_id, recursion_depth, property_names)
-    }
-}
-
-pub trait GetGroupPropertiesFn<State> {
-    fn get_group_properties(
-        &self,
-        state: &mut State,
-        ids: Vec<i32>,
-        property_names: Vec<String>,
-    ) -> zbus::fdo::Result<Vec<PropertyItem>>;
-}
-
-impl<T, State> GetGroupPropertiesFn<State> for T
-where
-    T: Fn(&mut State, Vec<i32>, Vec<String>) -> zbus::fdo::Result<Vec<PropertyItem>>,
-{
-    fn get_group_properties(
-        &self,
-        state: &mut State,
-        ids: Vec<i32>,
-        property_names: Vec<String>,
-    ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        self(state, ids, property_names)
-    }
-}
-pub trait GetPropertyFn<State> {
-    fn get_property(
-        &self,
-        state: &mut State,
-        id: i32,
-        property_name: String,
-    ) -> zbus::fdo::Result<PropertyItem>;
-}
-
-impl<T, State> GetPropertyFn<State> for T
-where
-    T: Fn(&mut State, i32, String) -> zbus::fdo::Result<PropertyItem>,
-{
-    fn get_property(
-        &self,
-        state: &mut State,
-        id: i32,
-        property_name: String,
-    ) -> zbus::fdo::Result<PropertyItem> {
-        self(state, id, property_name)
-    }
-}
-
 #[derive(Debug)]
 pub enum EventUpdate {
     None,
     Update { revision: u32, parent: i32 },
+}
+
+pub trait RevisionFn<State> {
+    fn revision(&self, state: &State) -> u32;
+}
+
+impl<State, F> RevisionFn<State> for F
+where
+    F: Fn(&State) -> u32,
+{
+    fn revision(&self, state: &State) -> u32 {
+        self(state)
+    }
+}
+
+impl<State> RevisionFn<State> for u32 {
+    fn revision(&self, _state: &State) -> u32 {
+        *self
+    }
+}
+
+pub trait MenuFn<State> {
+    fn menu(&self, state: &State) -> MenuItem;
+}
+
+impl<State, F> MenuFn<State> for F
+where
+    F: Fn(&State) -> MenuItem,
+{
+    fn menu(&self, state: &State) -> MenuItem {
+        self(state)
+    }
 }
 
 pub trait OnClickedFn<State> {
@@ -475,8 +474,14 @@ where
         recursion_depth: i32,
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<(u32, MenuItem)> {
-        self.program
-            .get_layout(&mut self.state, parent_id, recursion_depth, property_names)
+        let property_names: Vec<&str> = property_names.iter().map(|name| name.as_str()).collect();
+        Ok((
+            self.program.revision(&self.state),
+            self.program
+                .menu(&self.state)
+                .get_filiter(parent_id, recursion_depth, &property_names)
+                .ok_or(zbus::fdo::Error::Failed("UnFounded".to_string()))?,
+        ))
     }
 
     // NOTE: this should not implemented by user
@@ -486,14 +491,19 @@ where
         ids: Vec<i32>,
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        self.program
-            .get_group_properties(&mut self.state, ids, property_names)
+        Ok(self
+            .program
+            .menu(&self.state)
+            .get_property_groups(ids, property_names))
     }
 
     // NOTE: this should not implemented by user
     /// GetProperty method
     fn get_property(&mut self, id: i32, name: String) -> zbus::fdo::Result<PropertyItem> {
-        self.program.get_property(&mut self.state, id, name)
+        self.program
+            .menu(&self.state)
+            .get_property(id, name)
+            .ok_or(zbus::fdo::Error::Failed("Unfound".to_string()))
     }
 
     /// Version property
