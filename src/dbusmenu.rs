@@ -124,14 +124,14 @@ pub struct ButtonOptions {
     pub icon_name: String,
 }
 
-impl<Message: Clone> From<MenuUnit<Message>> for MenuItem {
-    fn from(value: MenuUnit<Message>) -> Self {
+impl<Message: Clone> From<&MenuUnit<Message>> for MenuItem {
+    fn from(value: &MenuUnit<Message>) -> Self {
         let mut output = MenuItem {
-            id: value.id,
-            property: value.property,
+            id: value.id.clone(),
+            property: value.property.clone(),
             sub_menus: vec![],
         };
-        for sub_menu in value.sub_menus {
+        for sub_menu in &value.sub_menus {
             output = output.push_sub_menu(sub_menu.into());
         }
         output
@@ -335,7 +335,7 @@ pub trait DBusMenuItem {
 
     fn boot(&self) -> Self::State;
 
-    fn menu(&self, state: &Self::State) -> MenuUnit<Self::Message>;
+    fn menu<'a>(&'a self, state: &'a Self::State) -> &'a MenuUnit<Self::Message>;
 
     fn revision(&self, state: &Self::State) -> u32;
 
@@ -445,19 +445,6 @@ where
 impl<State> RevisionFn<State> for u32 {
     fn revision(&self, _state: &State) -> u32 {
         *self
-    }
-}
-
-pub trait MenuFn<State, Message: Clone> {
-    fn menu(&self, state: &State) -> MenuUnit<Message>;
-}
-
-impl<State, Message: Clone, F> MenuFn<State, Message> for F
-where
-    F: Fn(&State) -> MenuUnit<Message>,
-{
-    fn menu(&self, state: &State) -> MenuUnit<Message> {
-        self(state)
     }
 }
 
@@ -608,7 +595,7 @@ where
         timestamp: u32,
         #[zbus(object_server)] server: &zbus::ObjectServer,
     ) -> zbus::fdo::Result<()> {
-        let menu = self.program.menu(&self.state);
+        let menu = self.program.menu(&self.state).clone();
         let Some(button) = menu.find_menu_by_id(id) else {
             return Ok(());
         };
@@ -662,7 +649,7 @@ where
         let mut update_all = false;
         let mut update_parents: Vec<i32> = vec![];
         for (id, event_id, _data, timestamp) in events {
-            let menu = self.program.menu(&self.state);
+            let menu = self.program.menu(&self.state).clone();
             let Some(button) = menu.find_menu_by_id(id) else {
                 continue;
             };
