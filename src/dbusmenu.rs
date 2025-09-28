@@ -509,7 +509,7 @@ where
         self.program
             .menu(&self.state)
             .get_property(id, name)
-            .ok_or(zbus::fdo::Error::Failed("Unfound".to_string()))
+            .ok_or(zbus::fdo::Error::Failed("Unfounded".to_string()))
     }
 
     /// Version property
