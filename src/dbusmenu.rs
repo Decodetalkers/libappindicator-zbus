@@ -425,7 +425,8 @@ where
 #[derive(Debug)]
 pub enum EventUpdate {
     None,
-    Update { revision: u32, parent: i32 },
+    UpdateCurrent,
+    UpdateAll,
 }
 
 pub trait RevisionFn<State> {
@@ -621,17 +622,33 @@ where
             }
             _ => EventUpdate::None,
         };
-        if let EventUpdate::Update { revision, parent } = need_update {
-            let iface_rf = server
-                .interface::<_, DBusMenuInstance<Menu>>("/MenuBar")
-                .await?;
-            let _ = DBusMenuInstance::<Menu>::layout_updated(
-                iface_rf.signal_emitter(),
-                revision,
-                parent,
-            )
-            .await;
+        let revision = self.program.revision(&self.state);
+        match need_update {
+            EventUpdate::UpdateCurrent => {
+                let iface_rf = server
+                    .interface::<_, DBusMenuInstance<Menu>>("/MenuBar")
+                    .await?;
+                let _ = DBusMenuInstance::<Menu>::layout_updated(
+                    iface_rf.signal_emitter(),
+                    revision,
+                    id,
+                )
+                .await;
+            }
+            EventUpdate::UpdateAll => {
+                let iface_rf = server
+                    .interface::<_, DBusMenuInstance<Menu>>("/MenuBar")
+                    .await?;
+                let _ = DBusMenuInstance::<Menu>::layout_updated(
+                    iface_rf.signal_emitter(),
+                    revision,
+                    *Id::MAIN,
+                )
+                .await;
+            }
+            _ => {}
         }
+
         Ok(())
     }
 
@@ -642,6 +659,8 @@ where
         #[zbus(object_server)] server: &zbus::ObjectServer,
     ) -> zbus::fdo::Result<Vec<i32>> {
         let mut output = vec![];
+        let mut update_all = false;
+        let mut update_parents: Vec<i32> = vec![];
         for (id, event_id, _data, timestamp) in events {
             let menu = self.program.menu(&self.state);
             let Some(button) = menu.find_menu_by_id(id) else {
@@ -663,18 +682,42 @@ where
                     continue;
                 }
             };
-            if let EventUpdate::Update { revision, parent } = need_update {
+            match need_update {
+                EventUpdate::None => {
+                    continue;
+                }
+                EventUpdate::UpdateAll => {
+                    update_all = true;
+                }
+                EventUpdate::UpdateCurrent => {
+                    update_parents.push(*menu.id);
+                }
+            };
+            output.push(id);
+        }
+        let revision = self.program.revision(&self.state);
+        if update_all {
+            let iface_rf = server
+                .interface::<_, DBusMenuInstance<Menu>>("/MenuBar")
+                .await?;
+            let _ = DBusMenuInstance::<Menu>::layout_updated(
+                iface_rf.signal_emitter(),
+                revision,
+                *Id::MAIN,
+            )
+            .await;
+        } else {
+            for id in update_parents {
                 let iface_rf = server
                     .interface::<_, DBusMenuInstance<Menu>>("/MenuBar")
                     .await?;
                 let _ = DBusMenuInstance::<Menu>::layout_updated(
                     iface_rf.signal_emitter(),
                     revision,
-                    parent,
+                    id,
                 )
                 .await;
             }
-            output.push(id);
         }
         Ok(output)
     }
