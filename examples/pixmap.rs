@@ -1,9 +1,6 @@
 use libappindicator_zbus::{
     tray,
-    utils::{
-        Category, EventUpdate, IconPixmap, MenuItem, MenuProperty, MenuStatus, PropertyItem,
-        ToggleState, ToggleType,
-    },
+    utils::{ButtonOptions, Category, EventUpdate, IconPixmap, MenuStatus, MenuUnit},
 };
 use zbus::fdo::Result;
 
@@ -43,61 +40,47 @@ impl Base {
     }
 }
 
-struct Menu {
-    menu: MenuItem,
+#[derive(Debug, Clone, Copy)]
+enum Message {
+    Clicked,
+    Toggled,
 }
+
+struct Menu {
+    menu: MenuUnit<Message>,
+}
+
 impl Menu {
     fn boot() -> Self {
-        let menu = MenuItem::new(0, MenuProperty::submenu())
-            .push_sub_menu(MenuItem::new(
-                1,
-                MenuProperty {
-                    label: Some("Hello".to_owned()),
-                    icon_name: Some("input-method".to_owned()),
-                    enabled: Some(true),
-                    toggle_type: Some(ToggleType::Radio),
-                    toggle_state: Some(ToggleState::UnSelected),
-                    ..Default::default()
+        let menu = MenuUnit::root()
+            .push_sub_menu(MenuUnit::button(
+                ButtonOptions {
+                    label: "Hello".to_owned(),
+                    enabled: true,
+                    icon_name: "nheko".to_owned(),
                 },
+                Message::Clicked,
             ))
-            .push_sub_menu(MenuItem::new(
-                2,
-                MenuProperty {
-                    label: Some("World".to_owned()),
-                    icon_name: Some("fcitx_pinyin".to_owned()),
-                    enabled: Some(true),
-                    ..Default::default()
+            .push_sub_menu(MenuUnit::button(
+                ButtonOptions {
+                    label: "World".to_owned(),
+                    icon_name: "fcitx_pinyin".to_owned(),
+                    enabled: true,
                 },
+                Message::Toggled,
             ));
         Menu { menu }
     }
-    fn about_to_show(&mut self, id: i32) -> Result<bool> {
-        println!("about {id}");
-        Ok(true)
-    }
 
-    fn get_layout(
-        &mut self,
-        _parent_id: i32,
-        _recursion_depth: i32,
-        _property_name: Vec<String>,
-    ) -> Result<(u32, MenuItem)> {
-        Ok((1, self.menu.clone()))
-    }
-
-    fn get_group_properties(
-        &mut self,
-        ids: Vec<i32>,
-        _property_names: Vec<String>,
-    ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        Ok(self.menu.get_property_groups(ids))
+    fn menu(&self) -> MenuUnit<Message> {
+        self.menu.clone()
     }
 
     fn status(&self) -> MenuStatus {
         MenuStatus::Normal
     }
 
-    fn on_clicked(&mut self, _id: i32, _timestamp: u32) -> EventUpdate {
+    fn on_clicked(&mut self, _message: Message, _timestamp: u32) -> EventUpdate {
         println!("Yes, here!");
         EventUpdate::None
     }
@@ -110,17 +93,16 @@ async fn main() {
         "pixmap_text",
         "pixmap_test",
         Menu::boot,
-        Menu::about_to_show,
+        Menu::menu,
+        1,
     )
-    .with_item_is_menu(true)
+    .with_item_is_menu(false)
     .with_icon_pixmap(Base::icon_pixmap)
     .with_activate(Base::activate)
     .with_category(Category::ApplicationStatus)
     .with_context_menu(Base::context_menu)
     .with_scroll(Base::scroll)
     .with_secondary_activate(Base::secondary_activate)
-    .with_layout(Menu::get_layout)
-    .with_get_group_properties(Menu::get_group_properties)
     .with_menu_status(Menu::status)
     .with_on_clicked(Menu::on_clicked)
     .run()

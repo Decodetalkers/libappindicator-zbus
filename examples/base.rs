@@ -1,9 +1,6 @@
 use libappindicator_zbus::{
     tray,
-    utils::{
-        Category, EventUpdate, MenuItem, MenuProperty, MenuStatus, PropertyItem, TextDirection,
-        ToggleState, ToggleType,
-    },
+    utils::{ButtonOptions, Category, EventUpdate, MenuStatus, MenuUnit, TextDirection},
 };
 use zbus::fdo::Result;
 
@@ -30,97 +27,78 @@ impl Base {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum Message {
+    Clicked,
+    Toggled,
+}
+
 struct Menu {
-    menu: MenuItem,
+    menu: MenuUnit<Message>,
 }
 
 impl Menu {
     fn boot() -> Self {
-        let menu = MenuItem::new(0, MenuProperty::submenu())
-            .push_sub_menu(MenuItem::new(
-                1,
-                MenuProperty {
-                    label: Some("Hello".to_owned()),
-                    icon_name: Some("input-method".to_owned()),
-                    enabled: Some(true),
-                    toggle_type: Some(ToggleType::Radio),
-                    toggle_state: Some(ToggleState::UnSelected),
-                    ..Default::default()
+        let menu = MenuUnit::root()
+            .push_sub_menu(MenuUnit::button(
+                ButtonOptions {
+                    label: "Hello".to_owned(),
+                    enabled: true,
+                    icon_name: "nheko".to_owned(),
                 },
+                Message::Clicked,
             ))
-            .push_sub_menu(MenuItem::new(
-                2,
-                MenuProperty {
-                    label: Some("World".to_owned()),
-                    icon_name: Some("fcitx_pinyin".to_owned()),
-                    enabled: Some(true),
-                    ..Default::default()
+            .push_sub_menu(MenuUnit::button(
+                ButtonOptions {
+                    label: "World".to_owned(),
+                    icon_name: "fcitx_pinyin".to_owned(),
+                    enabled: true,
                 },
-            ));
+                Message::Toggled,
+            ))
+            .push_sub_menu(
+                MenuUnit::sub_menu("Next".to_owned()).push_sub_menu(MenuUnit::button(
+                    ButtonOptions {
+                        label: "Good".to_owned(),
+                        enabled: true,
+                        icon_name: "wezterm".to_owned(),
+                    },
+                    Message::Clicked,
+                )),
+            );
         Menu { menu }
     }
 
-    fn about_to_show(&mut self, _id: i32) -> Result<bool> {
-        Ok(true)
+    fn menu(&self) -> MenuUnit<Message> {
+        self.menu.clone()
     }
-
-    fn get_layout(
-        &mut self,
-        _parent_id: i32,
-        _recursion_depth: i32,
-        _property_name: Vec<String>,
-    ) -> Result<(u32, MenuItem)> {
-        Ok((1, self.menu.clone()))
-    }
-
-    fn get_group_properties(
-        &mut self,
-        ids: Vec<i32>,
-        _property_names: Vec<String>,
-    ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        Ok(self.menu.get_property_groups(ids))
-    }
-
     fn status(&self) -> MenuStatus {
         MenuStatus::Normal
     }
 
-    fn on_clicked(&mut self, _id: i32, _timestamp: u32) -> EventUpdate {
-        println!("Yes, here!");
-        EventUpdate::None
-    }
-
-    fn on_toggled(&mut self, id: i32, status: ToggleState, timestamp: u32) -> EventUpdate {
-        println!("toggled, id = {id}, status = {status:?}, timestamp = {timestamp}");
+    fn on_clicked(&mut self, message: Message, _timestamp: u32) -> EventUpdate {
+        println!("message: {message:?}");
         EventUpdate::None
     }
 }
 
 #[tokio::main]
 async fn main() {
-    let connection = tray(
-        Base::boot,
-        "hello",
-        "fake_nheko",
-        Menu::boot,
-        Menu::about_to_show,
-    )
-    .with_item_is_menu(true)
-    .with_icon_name("nheko")
-    .with_activate(Base::activate)
-    .with_category(Category::ApplicationStatus)
-    .with_text_direction(TextDirection::Rtl)
-    .with_context_menu(Base::context_menu)
-    .with_scroll(Base::scroll)
-    .with_secondary_activate(Base::secondary_activate)
-    .with_layout(Menu::get_layout)
-    .with_get_group_properties(Menu::get_group_properties)
-    .with_menu_status(Menu::status)
-    .with_on_clicked(Menu::on_clicked)
-    .with_on_toggled(Menu::on_toggled)
-    .run()
-    .await
-    .unwrap();
+    let connection = tray(Base::boot, "hello", "fake_nheko", Menu::boot, Menu::menu, 1)
+        .with_item_is_menu(false)
+        .with_icon_name("nheko")
+        .with_activate(Base::activate)
+        .with_category(Category::ApplicationStatus)
+        .with_text_direction(TextDirection::Rtl)
+        .with_context_menu(Base::context_menu)
+        .with_scroll(Base::scroll)
+        .with_secondary_activate(Base::secondary_activate)
+        //.with_get_group_properties(Menu::get_group_properties)
+        .with_menu_status(Menu::status)
+        .with_on_clicked(Menu::on_clicked)
+        .run()
+        .await
+        .unwrap();
 
     println!("{:?}", connection.unique_name());
     std::future::pending::<()>().await;

@@ -19,6 +19,9 @@
 //!
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
+use std::ops::Deref;
+use std::sync::atomic::{self, AtomicI32};
+
 use serde::{Deserialize, Serialize};
 use zbus::zvariant::{self, OwnedValue, Type, Value, as_value::optional};
 
@@ -61,9 +64,16 @@ impl MenuProperty {
 }
 
 impl MenuProperty {
-    pub fn submenu() -> Self {
+    pub fn root() -> Self {
         MenuProperty {
             label: Some("root".to_owned()),
+            children_display: Some("submenu".to_owned()),
+            ..Default::default()
+        }
+    }
+    pub fn submenu(label: String) -> Self {
+        MenuProperty {
+            label: Some(label),
             children_display: Some("submenu".to_owned()),
             ..Default::default()
         }
@@ -71,9 +81,125 @@ impl MenuProperty {
 }
 
 #[derive(Type, Debug, Serialize, Deserialize, OwnedValue, Value, Clone)]
+pub struct Id(i32);
+
+static COUNT: AtomicI32 = AtomicI32::new(1);
+
+impl Id {
+    const MAIN: Self = Id(0);
+    /// Creates a new unique window [`Id`].
+    pub fn unique() -> Id {
+        Id(COUNT.fetch_add(1, atomic::Ordering::Relaxed))
+    }
+}
+
+impl Deref for Id {
+    type Target = i32;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[allow(unused)]
+#[derive(Debug, Clone)]
+enum MenuType {
+    Root,
+    SubMenu,
+    Button,
+}
+
+#[derive(Debug, Clone)]
+pub struct MenuUnit<Message: Clone> {
+    id: Id,
+    tp: MenuType,
+    pub property: MenuProperty,
+    pub sub_menus: Vec<MenuUnit<Message>>,
+    pub message: Option<Message>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ButtonOptions {
+    pub label: String,
+    pub enabled: bool,
+    pub icon_name: String,
+}
+
+impl<Message: Clone> From<MenuUnit<Message>> for MenuItem {
+    fn from(value: MenuUnit<Message>) -> Self {
+        let mut output = MenuItem {
+            id: value.id,
+            property: value.property,
+            sub_menus: vec![],
+        };
+        for sub_menu in value.sub_menus {
+            output = output.push_sub_menu(sub_menu.into());
+        }
+        output
+    }
+}
+
+impl<Message: Clone> MenuUnit<Message> {
+    pub fn button(
+        ButtonOptions {
+            label,
+            enabled,
+            icon_name,
+        }: ButtonOptions,
+        message: Message,
+    ) -> Self {
+        Self {
+            tp: MenuType::Button,
+            id: Id::unique(),
+            property: MenuProperty {
+                label: Some(label),
+                enabled: Some(enabled),
+                icon_name: Some(icon_name),
+                ..Default::default()
+            },
+            sub_menus: vec![],
+            message: Some(message),
+        }
+    }
+    pub fn root() -> Self {
+        Self {
+            id: Id::MAIN,
+            tp: MenuType::Root,
+            property: MenuProperty::root(),
+            sub_menus: vec![],
+            message: None,
+        }
+    }
+    pub fn sub_menu(label: String) -> Self {
+        Self {
+            id: Id::unique(),
+            tp: MenuType::SubMenu,
+            property: MenuProperty::submenu(label),
+            sub_menus: vec![],
+            message: None,
+        }
+    }
+    pub fn push_sub_menu(mut self, menu: Self) -> Self {
+        self.sub_menus.push(menu);
+        self
+    }
+
+    pub fn find_menu_by_id(&self, id: i32) -> Option<&Self> {
+        if *self.id == id {
+            return Some(self);
+        }
+        for menu in &self.sub_menus {
+            if let Some(menu) = menu.find_menu_by_id(id) {
+                return Some(menu);
+            }
+        }
+        None
+    }
+}
+
+#[derive(Type, Debug, Serialize, Deserialize, OwnedValue, Value, Clone)]
 #[zvariant(signature = "(ia{sv}av)")]
 pub struct MenuItem {
-    pub id: i32,
+    pub id: Id,
     pub property: MenuProperty,
     pub sub_menus: Vec<zvariant::OwnedValue>,
 }
@@ -90,28 +216,76 @@ pub enum MenuStatus {
 impl Default for MenuItem {
     fn default() -> Self {
         MenuItem {
-            id: 1,
-            property: MenuProperty::submenu(),
+            id: Id::unique(),
+            property: MenuProperty::root(),
             sub_menus: vec![],
         }
     }
 }
 
 impl MenuItem {
-    pub fn new(id: i32, property: MenuProperty) -> Self {
+    pub fn new(property: MenuProperty) -> Self {
         MenuItem {
-            id,
+            id: Id::unique(),
             property,
             sub_menus: vec![],
         }
     }
+
+    #[allow(unused)]
+    #[allow(clippy::only_used_in_recursion)]
+    pub fn get_filiter(
+        &self,
+        parent_id: i32,
+        recursion_depth: i32,
+        property_names: &[&str],
+    ) -> Option<MenuItem> {
+        if *self.id == parent_id {
+            let mut new_menu = MenuItem {
+                id: self.id.clone(),
+                property: self.property.clone(),
+                sub_menus: vec![],
+            };
+
+            let next_reversion_depth = recursion_depth - 1;
+            if next_reversion_depth != 0 {
+                for menu in self.sub_menus.as_slice() {
+                    let menu: MenuItem = menu.clone().try_into().unwrap();
+                    let next_menu = menu.filiter(next_reversion_depth, property_names);
+                    new_menu = new_menu.push_sub_menu(next_menu);
+                }
+            }
+            return Some(new_menu);
+        }
+        None
+    }
+
+    #[allow(unused)]
+    #[allow(clippy::only_used_in_recursion)]
+    fn filiter(&self, recursion_depth: i32, property_names: &[&str]) -> MenuItem {
+        let mut new_menu = MenuItem {
+            id: self.id.clone(),
+            property: self.property.clone(),
+            sub_menus: vec![],
+        };
+
+        let next_reversion_depth = recursion_depth - 1;
+        for menu in self.sub_menus.as_slice() {
+            let menu: MenuItem = menu.clone().try_into().unwrap();
+            let next_menu = menu.filiter(next_reversion_depth, property_names);
+            new_menu = new_menu.push_sub_menu(next_menu);
+        }
+
+        new_menu
+    }
+
     pub fn push_sub_menu(mut self, menu: MenuItem) -> Self {
         self.sub_menus.push(OwnedValue::try_from(menu).unwrap());
         self
     }
 
-    pub fn get_property(&self, id: i32) -> Option<PropertyItem> {
-        if self.id == id {
+    pub fn get_property(&self, id: i32, name: String) -> Option<PropertyItem> {
+        if *self.id == id {
             return Some(PropertyItem {
                 id,
                 item: self.property.clone(),
@@ -124,7 +298,7 @@ impl MenuItem {
             .collect();
 
         for sub_menu in sub_menus {
-            let property = sub_menu.get_property(id);
+            let property = sub_menu.get_property(id, name.clone());
             if property.is_some() {
                 return property;
             }
@@ -133,22 +307,20 @@ impl MenuItem {
         None
     }
 
-    pub fn get_property_groups(&self, ids: Vec<i32>) -> Vec<PropertyItem> {
+    pub fn get_property_groups(
+        &self,
+        ids: Vec<i32>,
+        _property_names: Vec<String>,
+    ) -> Vec<PropertyItem> {
         let mut output = vec![];
         for id in ids {
-            if let Some(property) = self.get_property(id) {
+            if let Some(property) = self.get_property(id, "".to_string()) {
                 output.push(property);
             }
         }
 
         output
     }
-}
-
-#[derive(Type, Debug, Default, Serialize, Deserialize)]
-pub struct LayoutData {
-    pub revision: u32,
-    pub data: MenuItem,
 }
 
 #[derive(Type, Debug, Default, Serialize, Deserialize)]
@@ -159,10 +331,18 @@ pub struct PropertyItem {
 
 pub trait DBusMenuItem {
     type State;
+    type Message: Clone;
 
     fn boot(&self) -> Self::State;
 
-    fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool>;
+    fn menu(&self, state: &Self::State) -> MenuUnit<Self::Message>;
+
+    fn revision(&self, state: &Self::State) -> u32;
+
+    #[allow(unused)]
+    fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
+        Err(zbus::fdo::Error::Failed("Unimplemented".to_string()))
+    }
 
     /// AboutToShowGroup method
     #[allow(unused)]
@@ -174,52 +354,15 @@ pub trait DBusMenuItem {
         Err(zbus::fdo::Error::Failed("Unimplemented".to_string()))
     }
 
-    #[allow(unused)]
-    fn get_layout(
-        &self,
-        state: &mut Self::State,
-        parent_id: i32,
-        recursion_depth: i32,
-        property_names: Vec<String>,
-    ) -> zbus::fdo::Result<(u32, MenuItem)> {
-        Ok((1, MenuItem::default()))
-    }
-
     fn status(&self, _state: &Self::State) -> zbus::fdo::Result<MenuStatus> {
         Ok(MenuStatus::Normal)
     }
 
     #[allow(unused)]
-    fn get_group_properties(
+    fn on_clicked(
         &self,
         state: &mut Self::State,
-        ids: Vec<i32>,
-        property_names: Vec<String>,
-    ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        Ok(vec![])
-    }
-
-    #[allow(unused)]
-    fn get_property(
-        &self,
-        state: &mut Self::State,
-        id: i32,
-        name: String,
-    ) -> zbus::fdo::Result<PropertyItem> {
-        Err(zbus::fdo::Error::Failed("Unimplemented".to_string()))
-    }
-
-    #[allow(unused)]
-    fn on_clicked(&self, state: &mut Self::State, id: i32, timestamp: u32) -> EventUpdate {
-        EventUpdate::None
-    }
-
-    #[allow(unused)]
-    fn on_toggled(
-        &self,
-        state: &mut Self::State,
-        id: i32,
-        status: ToggleState,
+        message: Self::Message,
         timestamp: u32,
     ) -> EventUpdate {
         EventUpdate::None
@@ -267,85 +410,15 @@ where
     }
 }
 pub trait AboutToShowFn<State> {
-    fn about_to_show(&self, state: &mut State, id: i32) -> zbus::fdo::Result<bool>;
+    fn about_to_show(&self, state: &mut State, id: i32) -> bool;
 }
 
 impl<T, State> AboutToShowFn<State> for T
 where
-    T: Fn(&mut State, i32) -> zbus::fdo::Result<bool>,
+    T: Fn(&mut State, i32) -> bool,
 {
-    fn about_to_show(&self, state: &mut State, id: i32) -> zbus::fdo::Result<bool> {
+    fn about_to_show(&self, state: &mut State, id: i32) -> bool {
         self(state, id)
-    }
-}
-
-pub trait GetLayoutFn<State> {
-    fn get_layout(
-        &self,
-        state: &mut State,
-        parent_id: i32,
-        recursion_depth: i32,
-        property_names: Vec<String>,
-    ) -> zbus::fdo::Result<(u32, MenuItem)>;
-}
-
-impl<T, State> GetLayoutFn<State> for T
-where
-    T: Fn(&mut State, i32, i32, Vec<String>) -> zbus::fdo::Result<(u32, MenuItem)>,
-{
-    fn get_layout(
-        &self,
-        state: &mut State,
-        parent_id: i32,
-        recursion_depth: i32,
-        property_names: Vec<String>,
-    ) -> zbus::fdo::Result<(u32, MenuItem)> {
-        self(state, parent_id, recursion_depth, property_names)
-    }
-}
-
-pub trait GetGroupPropertiesFn<State> {
-    fn get_group_properties(
-        &self,
-        state: &mut State,
-        ids: Vec<i32>,
-        property_names: Vec<String>,
-    ) -> zbus::fdo::Result<Vec<PropertyItem>>;
-}
-
-impl<T, State> GetGroupPropertiesFn<State> for T
-where
-    T: Fn(&mut State, Vec<i32>, Vec<String>) -> zbus::fdo::Result<Vec<PropertyItem>>,
-{
-    fn get_group_properties(
-        &self,
-        state: &mut State,
-        ids: Vec<i32>,
-        property_names: Vec<String>,
-    ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        self(state, ids, property_names)
-    }
-}
-pub trait GetPropertyFn<State> {
-    fn get_property(
-        &self,
-        state: &mut State,
-        id: i32,
-        property_name: String,
-    ) -> zbus::fdo::Result<PropertyItem>;
-}
-
-impl<T, State> GetPropertyFn<State> for T
-where
-    T: Fn(&mut State, i32, String) -> zbus::fdo::Result<PropertyItem>,
-{
-    fn get_property(
-        &self,
-        state: &mut State,
-        id: i32,
-        property_name: String,
-    ) -> zbus::fdo::Result<PropertyItem> {
-        self(state, id, property_name)
     }
 }
 
@@ -355,41 +428,48 @@ pub enum EventUpdate {
     Update { revision: u32, parent: i32 },
 }
 
-pub trait OnClickedFn<State> {
-    fn on_clicked(&self, state: &mut State, id: i32, timestamp: u32) -> EventUpdate;
+pub trait RevisionFn<State> {
+    fn revision(&self, state: &State) -> u32;
 }
 
-impl<T, State> OnClickedFn<State> for T
+impl<State, F> RevisionFn<State> for F
 where
-    T: Fn(&mut State, i32, u32) -> EventUpdate,
+    F: Fn(&State) -> u32,
 {
-    fn on_clicked(&self, state: &mut State, id: i32, timestamp: u32) -> EventUpdate {
-        self(state, id, timestamp)
+    fn revision(&self, state: &State) -> u32 {
+        self(state)
     }
 }
 
-pub trait OnToggledFn<State> {
-    fn on_toggled(
-        &self,
-        state: &mut State,
-        id: i32,
-        status: ToggleState,
-        timestamp: u32,
-    ) -> EventUpdate;
+impl<State> RevisionFn<State> for u32 {
+    fn revision(&self, _state: &State) -> u32 {
+        *self
+    }
 }
 
-impl<T, State> OnToggledFn<State> for T
+pub trait MenuFn<State, Message: Clone> {
+    fn menu(&self, state: &State) -> MenuUnit<Message>;
+}
+
+impl<State, Message: Clone, F> MenuFn<State, Message> for F
 where
-    T: Fn(&mut State, i32, ToggleState, u32) -> EventUpdate,
+    F: Fn(&State) -> MenuUnit<Message>,
 {
-    fn on_toggled(
-        &self,
-        state: &mut State,
-        id: i32,
-        status: ToggleState,
-        timestamp: u32,
-    ) -> EventUpdate {
-        self(state, id, status, timestamp)
+    fn menu(&self, state: &State) -> MenuUnit<Message> {
+        self(state)
+    }
+}
+
+pub trait OnClickedFn<State, Message> {
+    fn on_clicked(&self, state: &mut State, message: Message, timestamp: u32) -> EventUpdate;
+}
+
+impl<T, State, Message> OnClickedFn<State, Message> for T
+where
+    T: Fn(&mut State, Message, u32) -> EventUpdate,
+{
+    fn on_clicked(&self, state: &mut State, message: Message, timestamp: u32) -> EventUpdate {
+        self(state, message, timestamp)
     }
 }
 
@@ -457,6 +537,7 @@ impl<Menu: DBusMenuItem> DBusMenuInstance<Menu>
 where
     Menu: Send + Sync + 'static,
     Menu::State: 'static + Send + Sync,
+    Menu::Message: 'static + Send + Sync + Clone,
 {
     fn about_to_show(&mut self, id: i32) -> zbus::fdo::Result<bool> {
         self.program.about_to_show(&mut self.state, id)
@@ -475,8 +556,14 @@ where
         recursion_depth: i32,
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<(u32, MenuItem)> {
-        self.program
-            .get_layout(&mut self.state, parent_id, recursion_depth, property_names)
+        let property_names: Vec<&str> = property_names.iter().map(|name| name.as_str()).collect();
+        let menuitem: MenuItem = self.program.menu(&self.state).into();
+        Ok((
+            self.program.revision(&self.state),
+            menuitem
+                .get_filiter(parent_id, recursion_depth, &property_names)
+                .ok_or(zbus::fdo::Error::Failed("UnFounded".to_string()))?,
+        ))
     }
 
     // NOTE: this should not implemented by user
@@ -486,14 +573,17 @@ where
         ids: Vec<i32>,
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        self.program
-            .get_group_properties(&mut self.state, ids, property_names)
+        let menuitem: MenuItem = self.program.menu(&self.state).into();
+        Ok(menuitem.get_property_groups(ids, property_names))
     }
 
     // NOTE: this should not implemented by user
     /// GetProperty method
     fn get_property(&mut self, id: i32, name: String) -> zbus::fdo::Result<PropertyItem> {
-        self.program.get_property(&mut self.state, id, name)
+        let menuitem: MenuItem = self.program.menu(&self.state).into();
+        menuitem
+            .get_property(id, name)
+            .ok_or(zbus::fdo::Error::Failed("Unfounded".to_string()))
     }
 
     /// Version property
@@ -513,18 +603,21 @@ where
         &mut self,
         id: i32,
         event_id: String,
-        data: zbus::zvariant::OwnedValue,
+        _data: zbus::zvariant::OwnedValue,
         timestamp: u32,
         #[zbus(object_server)] server: &zbus::ObjectServer,
     ) -> zbus::fdo::Result<()> {
+        let menu = self.program.menu(&self.state);
+        let Some(button) = menu.find_menu_by_id(id) else {
+            return Ok(());
+        };
         let need_update = match event_id.as_str() {
-            "clicked" => self.program.on_clicked(&mut self.state, id, timestamp),
-            "toggled" => {
-                let status: ToggleState = data
-                    .try_into()
-                    .map_err(|e| zbus::fdo::Error::Failed(format!("data error: {e}")))?;
+            "clicked" => {
+                if !matches!(button.tp, MenuType::Button) {
+                    return Ok(());
+                }
                 self.program
-                    .on_toggled(&mut self.state, id, status, timestamp)
+                    .on_clicked(&mut self.state, button.message.clone().unwrap(), timestamp)
             }
             _ => EventUpdate::None,
         };
@@ -549,15 +642,22 @@ where
         #[zbus(object_server)] server: &zbus::ObjectServer,
     ) -> zbus::fdo::Result<Vec<i32>> {
         let mut output = vec![];
-        for (id, event_id, data, timestamp) in events {
+        for (id, event_id, _data, timestamp) in events {
+            let menu = self.program.menu(&self.state);
+            let Some(button) = menu.find_menu_by_id(id) else {
+                continue;
+            };
+
             let need_update = match event_id.as_str() {
-                "clicked" => self.program.on_clicked(&mut self.state, id, timestamp),
-                "toggled" => {
-                    let status: ToggleState = data
-                        .try_into()
-                        .map_err(|e| zbus::fdo::Error::Failed(format!("data error: {e}")))?;
-                    self.program
-                        .on_toggled(&mut self.state, id, status, timestamp)
+                "clicked" => {
+                    if !matches!(button.tp, MenuType::Button) {
+                        continue;
+                    }
+                    self.program.on_clicked(
+                        &mut self.state,
+                        button.message.clone().unwrap(),
+                        timestamp,
+                    )
                 }
                 _ => {
                     continue;
