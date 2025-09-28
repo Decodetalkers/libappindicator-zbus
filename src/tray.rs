@@ -1,8 +1,8 @@
 use crate::{
     dbusmenu::{
         AboutToShowFn, AboutToShowGroupFn, DBusMenuBootFn, DBusMenuInstance, DBusMenuItem,
-        EventUpdate, IconThemePathFn, MenuFn, MenuStatus, MenuStatusFn, MenuUnit, OnClickedFn,
-        RevisionFn, TextDirectionFn,
+        EventUpdate, IconThemePathFn, MenuStatus, MenuStatusFn, MenuUnit, OnClickedFn, RevisionFn,
+        TextDirectionFn,
     },
     status_notifier_item::{
         ActivateFn, AttentionIconNameFn, AttentionIconPixmapFn, AttentionMovieNameFn, CategoryFn,
@@ -1983,7 +1983,8 @@ fn with_menu_status<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
+
+        fn menu<'a>(&'a self, state: &'a Self::State) -> &'a MenuUnit<M::Message> {
             self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2043,7 +2044,8 @@ fn with_on_clicked<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
+
+        fn menu<'a>(&'a self, state: &'a Self::State) -> &'a MenuUnit<M::Message> {
             self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2104,7 +2106,8 @@ fn with_text_direction<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
+
+        fn menu<'a>(&'a self, state: &'a Self::State) -> &'a MenuUnit<M::Message> {
             self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2165,7 +2168,8 @@ fn with_menu_icon_theme_path<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
+
+        fn menu<'a>(&'a self, state: &'a Self::State) -> &'a MenuUnit<M::Message> {
             self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2225,7 +2229,7 @@ fn with_about_to_show<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
+        fn menu<'a>(&'a self, state: &'a Self::State) -> &'a MenuUnit<M::Message> {
             self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2286,8 +2290,8 @@ fn with_about_to_show_group<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
-            self.program.menu(state)
+        fn menu<'a>(&'a self, state: &'a Self::State) -> &'a MenuUnit<M::Message> {
+            &self.program.menu(state)
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
@@ -2332,7 +2336,7 @@ pub fn tray<State, MenuState, Message>(
     title: impl TitleFn<State>,
 
     menu_boot: impl DBusMenuBootFn<MenuState>,
-    menu: impl MenuFn<MenuState, Message>,
+    menu: impl Fn(&MenuState) -> &MenuUnit<Message>,
     revision: impl RevisionFn<MenuState>,
 ) -> Tray<
     impl StatusNotifierItem<State = State>,
@@ -2379,7 +2383,7 @@ where
         for MenuInstance<MenuState, Message, MenuBootFn, MenuFn, RevisionFn>
     where
         MenuBootFn: self::DBusMenuBootFn<MenuState>,
-        MenuFn: self::MenuFn<MenuState, Message>,
+        MenuFn: Fn(&MenuState) -> &MenuUnit<Message>,
         RevisionFn: self::RevisionFn<MenuState>,
     {
         type State = MenuState;
@@ -2391,8 +2395,8 @@ where
         fn revision(&self, state: &Self::State) -> u32 {
             self.revision.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<Message> {
-            self.menu.menu(state)
+        fn menu<'a>(&'a self, state: &'a Self::State) -> &'a MenuUnit<Message> {
+            (self.menu)(state)
         }
     }
     Tray {

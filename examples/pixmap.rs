@@ -72,10 +72,9 @@ impl Menu {
         Menu { menu }
     }
 
-    fn menu(&self) -> MenuUnit<Message> {
-        self.menu.clone()
+    fn menu(&self) -> &MenuUnit<Message> {
+        &self.menu
     }
-
     fn status(&self) -> MenuStatus {
         MenuStatus::Normal
     }
