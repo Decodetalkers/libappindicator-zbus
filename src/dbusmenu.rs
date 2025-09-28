@@ -129,6 +129,7 @@ impl MenuItem {
     }
 
     #[allow(unused)]
+    #[allow(clippy::only_used_in_recursion)]
     pub fn get_filiter(
         &self,
         parent_id: i32,
@@ -154,6 +155,8 @@ impl MenuItem {
         None
     }
 
+    #[allow(unused)]
+    #[allow(clippy::only_used_in_recursion)]
     fn filiter(&self, recursion_depth: i32, property_names: &[&str]) -> MenuItem {
         let mut new_menu = MenuItem {
             id: self.id.clone(),
