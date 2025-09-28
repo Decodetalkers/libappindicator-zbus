@@ -64,9 +64,16 @@ impl MenuProperty {
 }
 
 impl MenuProperty {
-    pub fn submenu() -> Self {
+    pub fn root() -> Self {
         MenuProperty {
             label: Some("root".to_owned()),
+            children_display: Some("submenu".to_owned()),
+            ..Default::default()
+        }
+    }
+    pub fn submenu(label: String) -> Self {
+        MenuProperty {
+            label: Some(label),
             children_display: Some("submenu".to_owned()),
             ..Default::default()
         }
@@ -76,7 +83,7 @@ impl MenuProperty {
 #[derive(Type, Debug, Serialize, Deserialize, OwnedValue, Value, Clone)]
 pub struct Id(i32);
 
-static COUNT: AtomicI32 = AtomicI32::new(0);
+static COUNT: AtomicI32 = AtomicI32::new(1);
 
 impl Id {
     const MAIN: Self = Id(0);
@@ -93,12 +100,28 @@ impl Deref for Id {
     }
 }
 
+#[allow(unused)]
+#[derive(Debug, Clone)]
+enum MenuType {
+    Root,
+    SubMenu,
+    Button,
+}
+
 #[derive(Debug, Clone)]
 pub struct MenuUnit<Message: Clone> {
     id: Id,
+    tp: MenuType,
     pub property: MenuProperty,
     pub sub_menus: Vec<MenuUnit<Message>>,
-    pub message: Message,
+    pub message: Option<Message>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ButtonOptions {
+    pub label: String,
+    pub enabled: bool,
+    pub icon_name: String,
 }
 
 impl<Message: Clone> From<MenuUnit<Message>> for MenuItem {
@@ -116,12 +139,43 @@ impl<Message: Clone> From<MenuUnit<Message>> for MenuItem {
 }
 
 impl<Message: Clone> MenuUnit<Message> {
-    pub fn new(property: MenuProperty, message: Message) -> Self {
+    pub fn button(
+        ButtonOptions {
+            label,
+            enabled,
+            icon_name,
+        }: ButtonOptions,
+        message: Message,
+    ) -> Self {
+        Self {
+            tp: MenuType::Button,
+            id: Id::unique(),
+            property: MenuProperty {
+                label: Some(label),
+                enabled: Some(enabled),
+                icon_name: Some(icon_name),
+                ..Default::default()
+            },
+            sub_menus: vec![],
+            message: Some(message),
+        }
+    }
+    pub fn root() -> Self {
+        Self {
+            id: Id::MAIN,
+            tp: MenuType::Root,
+            property: MenuProperty::root(),
+            sub_menus: vec![],
+            message: None,
+        }
+    }
+    pub fn sub_menu(label: String) -> Self {
         Self {
             id: Id::unique(),
-            property,
+            tp: MenuType::SubMenu,
+            property: MenuProperty::submenu(label),
             sub_menus: vec![],
-            message,
+            message: None,
         }
     }
     pub fn push_sub_menu(mut self, menu: Self) -> Self {
@@ -163,7 +217,7 @@ impl Default for MenuItem {
     fn default() -> Self {
         MenuItem {
             id: Id::unique(),
-            property: MenuProperty::submenu(),
+            property: MenuProperty::root(),
             sub_menus: vec![],
         }
     }
@@ -559,8 +613,11 @@ where
         };
         let need_update = match event_id.as_str() {
             "clicked" => {
+                if !matches!(button.tp, MenuType::Button) {
+                    return Ok(());
+                }
                 self.program
-                    .on_clicked(&mut self.state, button.message.clone(), timestamp)
+                    .on_clicked(&mut self.state, button.message.clone().unwrap(), timestamp)
             }
             _ => EventUpdate::None,
         };
@@ -593,8 +650,14 @@ where
 
             let need_update = match event_id.as_str() {
                 "clicked" => {
-                    self.program
-                        .on_clicked(&mut self.state, button.message.clone(), timestamp)
+                    if !matches!(button.tp, MenuType::Button) {
+                        continue;
+                    }
+                    self.program.on_clicked(
+                        &mut self.state,
+                        button.message.clone().unwrap(),
+                        timestamp,
+                    )
                 }
                 _ => {
                     continue;

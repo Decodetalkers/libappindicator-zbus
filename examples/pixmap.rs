@@ -1,9 +1,6 @@
 use libappindicator_zbus::{
     tray,
-    utils::{
-        Category, EventUpdate, IconPixmap, MenuProperty, MenuStatus, MenuUnit, ToggleState,
-        ToggleType,
-    },
+    utils::{ButtonOptions, Category, EventUpdate, IconPixmap, MenuStatus, MenuUnit},
 };
 use zbus::fdo::Result;
 
@@ -42,8 +39,12 @@ impl Base {
         Ok(vec![self.pixmap.clone()])
     }
 }
-#[derive(Clone, Copy)]
-struct Message;
+
+#[derive(Debug, Clone, Copy)]
+enum Message {
+    Clicked,
+    Toggled,
+}
 
 struct Menu {
     menu: MenuUnit<Message>,
@@ -51,26 +52,22 @@ struct Menu {
 
 impl Menu {
     fn boot() -> Self {
-        let menu = MenuUnit::new(MenuProperty::submenu(), Message)
-            .push_sub_menu(MenuUnit::new(
-                MenuProperty {
-                    label: Some("Hello".to_owned()),
-                    icon_name: Some("input-method".to_owned()),
-                    enabled: Some(true),
-                    toggle_type: Some(ToggleType::Radio),
-                    toggle_state: Some(ToggleState::UnSelected),
-                    ..Default::default()
+        let menu = MenuUnit::root()
+            .push_sub_menu(MenuUnit::button(
+                ButtonOptions {
+                    label: "Hello".to_owned(),
+                    enabled: true,
+                    icon_name: "nheko".to_owned(),
                 },
-                Message,
+                Message::Clicked,
             ))
-            .push_sub_menu(MenuUnit::new(
-                MenuProperty {
-                    label: Some("World".to_owned()),
-                    icon_name: Some("fcitx_pinyin".to_owned()),
-                    enabled: Some(true),
-                    ..Default::default()
+            .push_sub_menu(MenuUnit::button(
+                ButtonOptions {
+                    label: "World".to_owned(),
+                    icon_name: "fcitx_pinyin".to_owned(),
+                    enabled: true,
                 },
-                Message,
+                Message::Toggled,
             ));
         Menu { menu }
     }

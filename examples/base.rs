@@ -1,9 +1,6 @@
 use libappindicator_zbus::{
     tray,
-    utils::{
-        Category, EventUpdate, MenuProperty, MenuStatus, MenuUnit, TextDirection, ToggleState,
-        ToggleType,
-    },
+    utils::{ButtonOptions, Category, EventUpdate, MenuStatus, MenuUnit, TextDirection},
 };
 use zbus::fdo::Result;
 
@@ -42,27 +39,33 @@ struct Menu {
 
 impl Menu {
     fn boot() -> Self {
-        let menu = MenuUnit::new(MenuProperty::submenu(), Message::Toggled)
-            .push_sub_menu(MenuUnit::new(
-                MenuProperty {
-                    label: Some("Hello".to_owned()),
-                    icon_name: Some("input-method".to_owned()),
-                    enabled: Some(true),
-                    toggle_type: Some(ToggleType::Radio),
-                    toggle_state: Some(ToggleState::UnSelected),
-                    ..Default::default()
+        let menu = MenuUnit::root()
+            .push_sub_menu(MenuUnit::button(
+                ButtonOptions {
+                    label: "Hello".to_owned(),
+                    enabled: true,
+                    icon_name: "nheko".to_owned(),
                 },
                 Message::Clicked,
             ))
-            .push_sub_menu(MenuUnit::new(
-                MenuProperty {
-                    label: Some("World".to_owned()),
-                    icon_name: Some("fcitx_pinyin".to_owned()),
-                    enabled: Some(true),
-                    ..Default::default()
+            .push_sub_menu(MenuUnit::button(
+                ButtonOptions {
+                    label: "World".to_owned(),
+                    icon_name: "fcitx_pinyin".to_owned(),
+                    enabled: true,
                 },
                 Message::Toggled,
-            ));
+            ))
+            .push_sub_menu(
+                MenuUnit::sub_menu("Next".to_owned()).push_sub_menu(MenuUnit::button(
+                    ButtonOptions {
+                        label: "Good".to_owned(),
+                        enabled: true,
+                        icon_name: "wezterm".to_owned(),
+                    },
+                    Message::Clicked,
+                )),
+            );
         Menu { menu }
     }
 
