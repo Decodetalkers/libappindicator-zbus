@@ -79,6 +79,7 @@ pub struct Id(i32);
 static COUNT: AtomicI32 = AtomicI32::new(0);
 
 impl Id {
+    const MAIN: Self = Id(0);
     /// Creates a new unique window [`Id`].
     pub fn unique() -> Id {
         Id(COUNT.fetch_add(1, atomic::Ordering::Relaxed))
@@ -94,7 +95,7 @@ impl Deref for Id {
 
 #[derive(Debug, Clone)]
 pub struct MenuUnit<Message: Clone> {
-    pub id: Id,
+    id: Id,
     pub property: MenuProperty,
     pub sub_menus: Vec<MenuUnit<Message>>,
     pub message: Message,
@@ -193,12 +194,13 @@ impl MenuItem {
             };
 
             let next_reversion_depth = recursion_depth - 1;
-            for menu in self.sub_menus.as_slice() {
-                let menu: MenuItem = menu.clone().try_into().unwrap();
-                let next_menu = menu.filiter(next_reversion_depth, property_names);
-                new_menu = new_menu.push_sub_menu(next_menu);
+            if next_reversion_depth != 0 {
+                for menu in self.sub_menus.as_slice() {
+                    let menu: MenuItem = menu.clone().try_into().unwrap();
+                    let next_menu = menu.filiter(next_reversion_depth, property_names);
+                    new_menu = new_menu.push_sub_menu(next_menu);
+                }
             }
-
             return Some(new_menu);
         }
         None
