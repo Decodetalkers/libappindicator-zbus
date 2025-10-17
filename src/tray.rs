@@ -1,7 +1,7 @@
 use crate::{
     dbusmenu::{
         AboutToShowFn, AboutToShowGroupFn, DBusMenuBootFn, DBusMenuInstance, DBusMenuItem,
-        EventUpdate, IconThemePathFn, MenuFn, MenuStatus, MenuStatusFn, MenuUnit, OnClickedFn,
+        EventUpdate, IconThemePathFn, MenuBootFn, MenuStatus, MenuStatusFn, MenuUnit, OnClickedFn,
         RevisionFn, TextDirectionFn,
     },
     status_notifier_item::{
@@ -12,7 +12,7 @@ use crate::{
         ToolTipFn, WindowIdFn,
     },
     status_notifier_watcher::StatusNotifierWatcherProxy,
-    utils::{Category, IconPixmap, TextDirection, ToolTip},
+    utils::{Category, IconPixmap, MenuTree, TextDirection, ToolTip},
 };
 use std::marker::PhantomData;
 
@@ -60,6 +60,23 @@ where
             .await?;
         let mut data = iface_ref.get_mut().await;
         Ok(f(&mut data.state))
+    }
+
+    pub async fn update_full_menu(&self, menu_tree: MenuTree<M::Message>) -> zbus::Result<()> {
+        let iface_ref = self
+            .conn
+            .object_server()
+            .interface::<_, DBusMenuInstance<M>>("/MenuBar")
+            .await?;
+        let mut data = iface_ref.get_mut().await;
+        data.menu_tree = menu_tree;
+        let _ = DBusMenuInstance::<M>::layout_updated(
+            iface_ref.signal_emitter(),
+            data.program.revision(&data.state),
+            *crate::dbusmenu::Id::MAIN,
+        )
+        .await;
+        Ok(())
     }
 
     pub async fn update_state<F, R>(&self, f: F) -> zbus::Result<R>
@@ -133,9 +150,11 @@ where
         };
 
         let menu_state = self.menu_raw.boot();
+        let menu = self.menu_raw.menu();
         let instance_menu = DBusMenuInstance {
             program: self.menu_raw,
             state: menu_state,
+            menu_tree: menu,
         };
         let conn = connection::Builder::session()?
             .serve_at("/StatusNotifierItem", instance)?
@@ -1983,8 +2002,9 @@ fn with_menu_status<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
-            self.program.menu(state)
+
+        fn menu(&self) -> MenuTree<M::Message> {
+            self.program.menu()
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
@@ -2003,12 +2023,11 @@ fn with_menu_status<M: DBusMenuItem>(
         fn on_clicked(
             &self,
             state: &mut Self::State,
-            message: Self::Message,
+            button: &mut MenuUnit<Self::Message>,
             timestamp: u32,
         ) -> EventUpdate {
-            self.program.on_clicked(state, message, timestamp)
+            self.program.on_clicked(state, button, timestamp)
         }
-
         fn text_direction(&self, state: &Self::State) -> TextDirection {
             self.program.text_direction(state)
         }
@@ -2043,8 +2062,9 @@ fn with_on_clicked<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
-            self.program.menu(state)
+
+        fn menu(&self) -> MenuTree<M::Message> {
+            self.program.menu()
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
@@ -2063,12 +2083,11 @@ fn with_on_clicked<M: DBusMenuItem>(
         fn on_clicked(
             &self,
             state: &mut Self::State,
-            message: Self::Message,
+            button: &mut MenuUnit<Self::Message>,
             timestamp: u32,
         ) -> EventUpdate {
-            self.on_clicked.on_clicked(state, message, timestamp)
+            self.on_clicked.on_clicked(state, button, timestamp)
         }
-
         fn text_direction(&self, state: &Self::State) -> TextDirection {
             self.program.text_direction(state)
         }
@@ -2104,8 +2123,9 @@ fn with_text_direction<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
-            self.program.menu(state)
+
+        fn menu(&self) -> MenuTree<M::Message> {
+            self.program.menu()
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
@@ -2124,12 +2144,11 @@ fn with_text_direction<M: DBusMenuItem>(
         fn on_clicked(
             &self,
             state: &mut Self::State,
-            message: Self::Message,
+            button: &mut MenuUnit<Self::Message>,
             timestamp: u32,
         ) -> EventUpdate {
-            self.program.on_clicked(state, message, timestamp)
+            self.program.on_clicked(state, button, timestamp)
         }
-
         fn text_direction(&self, state: &Self::State) -> TextDirection {
             self.text_direction.text_direction(state)
         }
@@ -2165,8 +2184,9 @@ fn with_menu_icon_theme_path<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
-            self.program.menu(state)
+
+        fn menu(&self) -> MenuTree<M::Message> {
+            self.program.menu()
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
@@ -2185,12 +2205,11 @@ fn with_menu_icon_theme_path<M: DBusMenuItem>(
         fn on_clicked(
             &self,
             state: &mut Self::State,
-            message: Self::Message,
+            button: &mut MenuUnit<Self::Message>,
             timestamp: u32,
         ) -> EventUpdate {
-            self.program.on_clicked(state, message, timestamp)
+            self.program.on_clicked(state, button, timestamp)
         }
-
         fn text_direction(&self, state: &Self::State) -> TextDirection {
             self.program.text_direction(state)
         }
@@ -2225,8 +2244,9 @@ fn with_about_to_show<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
-            self.program.menu(state)
+
+        fn menu(&self) -> MenuTree<M::Message> {
+            self.program.menu()
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             Ok(self.about_to_show.about_to_show(state, id))
@@ -2245,10 +2265,10 @@ fn with_about_to_show<M: DBusMenuItem>(
         fn on_clicked(
             &self,
             state: &mut Self::State,
-            message: Self::Message,
+            button: &mut MenuUnit<Self::Message>,
             timestamp: u32,
         ) -> EventUpdate {
-            self.program.on_clicked(state, message, timestamp)
+            self.program.on_clicked(state, button, timestamp)
         }
 
         fn text_direction(&self, state: &Self::State) -> TextDirection {
@@ -2286,8 +2306,8 @@ fn with_about_to_show_group<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<M::Message> {
-            self.program.menu(state)
+        fn menu(&self) -> MenuTree<M::Message> {
+            self.program.menu()
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
             self.program.about_to_show(state, id)
@@ -2306,10 +2326,10 @@ fn with_about_to_show_group<M: DBusMenuItem>(
         fn on_clicked(
             &self,
             state: &mut Self::State,
-            message: Self::Message,
+            button: &mut MenuUnit<Self::Message>,
             timestamp: u32,
         ) -> EventUpdate {
-            self.program.on_clicked(state, message, timestamp)
+            self.program.on_clicked(state, button, timestamp)
         }
 
         fn text_direction(&self, state: &Self::State) -> TextDirection {
@@ -2332,7 +2352,7 @@ pub fn tray<State, MenuState, Message>(
     title: impl TitleFn<State>,
 
     menu_boot: impl DBusMenuBootFn<MenuState>,
-    menu: impl MenuFn<MenuState, Message>,
+    menu: impl MenuBootFn<Message>,
     revision: impl RevisionFn<MenuState>,
 ) -> Tray<
     impl StatusNotifierItem<State = State>,
@@ -2379,7 +2399,7 @@ where
         for MenuInstance<MenuState, Message, MenuBootFn, MenuFn, RevisionFn>
     where
         MenuBootFn: self::DBusMenuBootFn<MenuState>,
-        MenuFn: self::MenuFn<MenuState, Message>,
+        MenuFn: self::MenuBootFn<Message>,
         RevisionFn: self::RevisionFn<MenuState>,
     {
         type State = MenuState;
@@ -2391,8 +2411,8 @@ where
         fn revision(&self, state: &Self::State) -> u32 {
             self.revision.revision(state)
         }
-        fn menu(&self, state: &Self::State) -> MenuUnit<Message> {
-            self.menu.menu(state)
+        fn menu(&self) -> MenuTree<Message> {
+            self.menu.menu()
         }
     }
     Tray {

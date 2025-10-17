@@ -7,8 +7,9 @@ pub use tray::{Tray, TrayConnection, tray};
 
 pub mod utils {
     pub use crate::dbusmenu::{
-        ButtonOptions, EventUpdate, MenuItem, MenuProperty, MenuStatus, MenuUnit, PropertyItem,
-        TextDirection, ToggleState, ToggleType,
+        ButtonOptions, EventUpdate, MenuItem, MenuProperty, MenuStatus, MenuTree, MenuType,
+        MenuUnit, PropertyItem, RadioInitOption, RadioOptions, TextDirection, ToggleState,
+        ToggleType,
     };
 
     pub use crate::status_notifier_item::{Category, IconPixmap, NotifierStatus, ToolTip};

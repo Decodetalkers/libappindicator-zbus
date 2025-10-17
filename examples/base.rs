@@ -1,6 +1,6 @@
 use libappindicator_zbus::{
     tray,
-    utils::{ButtonOptions, Category, EventUpdate, MenuStatus, MenuUnit, TextDirection},
+    utils::{ButtonOptions, Category, EventUpdate, MenuStatus, MenuTree, MenuUnit, TextDirection},
 };
 use zbus::fdo::Result;
 
@@ -33,13 +33,19 @@ enum Message {
     Toggled,
 }
 
+#[allow(unused)]
 struct Menu {
-    menu: MenuUnit<Message>,
+    menu: MenuTree<Message>,
 }
 
 impl Menu {
     fn boot() -> Self {
-        let menu = MenuUnit::root()
+        let menu = Self::menu();
+        Menu { menu }
+    }
+
+    fn menu() -> MenuTree<Message> {
+        MenuTree::new()
             .push_sub_menu(MenuUnit::button(
                 ButtonOptions {
                     label: "Hello".to_owned(),
@@ -65,19 +71,15 @@ impl Menu {
                     },
                     Message::Clicked,
                 )),
-            );
-        Menu { menu }
+            )
     }
 
-    fn menu(&self) -> MenuUnit<Message> {
-        self.menu.clone()
-    }
     fn status(&self) -> MenuStatus {
         MenuStatus::Normal
     }
 
-    fn on_clicked(&mut self, message: Message, _timestamp: u32) -> EventUpdate {
-        println!("message: {message:?}");
+    fn on_clicked(&mut self, button: &mut MenuUnit<Message>, _timestamp: u32) -> EventUpdate {
+        println!("message: {button:?}");
         EventUpdate::None
     }
 }

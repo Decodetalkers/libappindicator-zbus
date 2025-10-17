@@ -1,6 +1,9 @@
 use libappindicator_zbus::{
     tray,
-    utils::{ButtonOptions, Category, EventUpdate, IconPixmap, MenuStatus, MenuUnit},
+    utils::{
+        ButtonOptions, Category, EventUpdate, IconPixmap, MenuStatus, MenuTree, MenuUnit,
+        RadioInitOption, RadioOptions,
+    },
 };
 use zbus::fdo::Result;
 
@@ -47,12 +50,20 @@ enum Message {
 }
 
 struct Menu {
-    menu: MenuUnit<Message>,
+    time: u32,
+    reversion: u32,
 }
 
 impl Menu {
     fn boot() -> Self {
-        let menu = MenuUnit::root()
+        Menu {
+            time: 0,
+            reversion: 0,
+        }
+    }
+
+    fn menu() -> MenuTree<Message> {
+        MenuTree::new()
             .push_sub_menu(MenuUnit::button(
                 ButtonOptions {
                     label: "Hello".to_owned(),
@@ -68,21 +79,38 @@ impl Menu {
                     enabled: true,
                 },
                 Message::Toggled,
-            ));
-        Menu { menu }
+            ))
+            .push_sub_menu(MenuUnit::toggle_group(vec![
+                RadioInitOption {
+                    options: RadioOptions {
+                        label: "A".to_owned(),
+                        enabled: true,
+                        ..Default::default()
+                    },
+                    message: Message::Toggled,
+                },
+                RadioInitOption {
+                    options: RadioOptions {
+                        label: "B".to_owned(),
+                        enabled: true,
+                        ..Default::default()
+                    },
+                    message: Message::Toggled,
+                },
+            ]))
     }
-
-    fn menu(&self) -> MenuUnit<Message> {
-        self.menu.clone()
-    }
-
     fn status(&self) -> MenuStatus {
         MenuStatus::Normal
     }
-
-    fn on_clicked(&mut self, _message: Message, _timestamp: u32) -> EventUpdate {
-        println!("Yes, here!");
-        EventUpdate::None
+    fn reversion(&self) -> u32 {
+        self.reversion
+    }
+    fn on_clicked(&mut self, button: &mut MenuUnit<Message>, _timestamp: u32) -> EventUpdate {
+        println!("button {:?}", button);
+        self.reversion += 1;
+        self.time += 1;
+        button.try_change_label(format!("Hello{}", self.time));
+        EventUpdate::UpdateAll
     }
 }
 
@@ -94,7 +122,7 @@ async fn main() {
         "pixmap_test",
         Menu::boot,
         Menu::menu,
-        1,
+        Menu::reversion,
     )
     .with_item_is_menu(false)
     .with_icon_pixmap(Base::icon_pixmap)
