@@ -2024,9 +2024,10 @@ fn with_menu_status<M: DBusMenuItem>(
             &self,
             state: &mut Self::State,
             button: &mut MenuUnit<Self::Message>,
+            message: Self::Message,
             timestamp: u32,
         ) -> EventUpdate {
-            self.program.on_clicked(state, button, timestamp)
+            self.program.on_clicked(state, button, message, timestamp)
         }
         fn text_direction(&self, state: &Self::State) -> TextDirection {
             self.program.text_direction(state)
@@ -2084,9 +2085,11 @@ fn with_on_clicked<M: DBusMenuItem>(
             &self,
             state: &mut Self::State,
             button: &mut MenuUnit<Self::Message>,
+            message: Self::Message,
             timestamp: u32,
         ) -> EventUpdate {
-            self.on_clicked.on_clicked(state, button, timestamp)
+            self.on_clicked
+                .on_clicked(state, button, message, timestamp)
         }
         fn text_direction(&self, state: &Self::State) -> TextDirection {
             self.program.text_direction(state)
@@ -2145,9 +2148,10 @@ fn with_text_direction<M: DBusMenuItem>(
             &self,
             state: &mut Self::State,
             button: &mut MenuUnit<Self::Message>,
+            message: Self::Message,
             timestamp: u32,
         ) -> EventUpdate {
-            self.program.on_clicked(state, button, timestamp)
+            self.program.on_clicked(state, button, message, timestamp)
         }
         fn text_direction(&self, state: &Self::State) -> TextDirection {
             self.text_direction.text_direction(state)
@@ -2206,9 +2210,10 @@ fn with_menu_icon_theme_path<M: DBusMenuItem>(
             &self,
             state: &mut Self::State,
             button: &mut MenuUnit<Self::Message>,
+            message: Self::Message,
             timestamp: u32,
         ) -> EventUpdate {
-            self.program.on_clicked(state, button, timestamp)
+            self.program.on_clicked(state, button, message, timestamp)
         }
         fn text_direction(&self, state: &Self::State) -> TextDirection {
             self.program.text_direction(state)
@@ -2266,9 +2271,10 @@ fn with_about_to_show<M: DBusMenuItem>(
             &self,
             state: &mut Self::State,
             button: &mut MenuUnit<Self::Message>,
+            message: Self::Message,
             timestamp: u32,
         ) -> EventUpdate {
-            self.program.on_clicked(state, button, timestamp)
+            self.program.on_clicked(state, button, message, timestamp)
         }
 
         fn text_direction(&self, state: &Self::State) -> TextDirection {
@@ -2327,9 +2333,10 @@ fn with_about_to_show_group<M: DBusMenuItem>(
             &self,
             state: &mut Self::State,
             button: &mut MenuUnit<Self::Message>,
+            message: Self::Message,
             timestamp: u32,
         ) -> EventUpdate {
-            self.program.on_clicked(state, button, timestamp)
+            self.program.on_clicked(state, button, message, timestamp)
         }
 
         fn text_direction(&self, state: &Self::State) -> TextDirection {

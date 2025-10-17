@@ -78,8 +78,13 @@ impl Menu {
         MenuStatus::Normal
     }
 
-    fn on_clicked(&mut self, button: &mut MenuUnit<Message>, _timestamp: u32) -> EventUpdate {
-        println!("message: {button:?}");
+    fn on_clicked(
+        &mut self,
+        button: &mut MenuUnit<Message>,
+        message: Message,
+        _timestamp: u32,
+    ) -> EventUpdate {
+        println!("message: {button:?}, {message:?}");
         EventUpdate::None
     }
 }

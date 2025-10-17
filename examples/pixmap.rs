@@ -105,8 +105,13 @@ impl Menu {
     fn reversion(&self) -> u32 {
         self.reversion
     }
-    fn on_clicked(&mut self, button: &mut MenuUnit<Message>, _timestamp: u32) -> EventUpdate {
-        println!("button {:?}", button);
+    fn on_clicked(
+        &mut self,
+        button: &mut MenuUnit<Message>,
+        message: Message,
+        _timestamp: u32,
+    ) -> EventUpdate {
+        println!("button {:?}, message: {:?}", button, message);
         self.reversion += 1;
         self.time += 1;
         button.try_change_label(format!("Hello{}", self.time));

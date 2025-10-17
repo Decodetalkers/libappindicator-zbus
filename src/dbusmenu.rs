@@ -240,6 +240,28 @@ impl<Message: Clone> MenuUnit<Message> {
             _ => {}
         }
     }
+    fn message(&self, id: i32) -> Option<Message> {
+        let fid = Id(id);
+        match self {
+            Self::RadioGroup { selections } => {
+                for selection in selections {
+                    let IdOrGroup::Id(oid) = selection.id_or_ids() else {
+                        continue;
+                    };
+                    if oid == fid {
+                        return selection.message(id);
+                    }
+                }
+            }
+            Self::RadioButton { id, message, .. } | Self::StandardButton { id, message, .. } => {
+                if fid == *id {
+                    return Some(message.clone());
+                }
+            }
+            _ => {}
+        }
+        None
+    }
     fn get_property(&self) -> Option<MenuProperty> {
         match self {
             Self::Root { .. } => Some(MenuProperty::root()),
@@ -383,6 +405,23 @@ impl<Message: Clone> MenuUnit<Message> {
         };
         for menu in sub_menus {
             if let Some(menu) = menu.find_menu_by_id_mut(id) {
+                return Some(menu);
+            }
+        }
+        None
+    }
+    fn find_menu_and_message_by_id_mut(&mut self, id: i32) -> Option<(&mut Self, Message)> {
+        if self.id_or_ids().contains_id(id) {
+            let Some(message) = self.message(id) else {
+                return None;
+            };
+            return Some((self, message));
+        }
+        let Some(sub_menus) = self.sub_menus_mut() else {
+            return None;
+        };
+        for menu in sub_menus {
+            if let Some(menu) = menu.find_menu_and_message_by_id_mut(id) {
                 return Some(menu);
             }
         }
@@ -557,6 +596,7 @@ pub trait DBusMenuItem {
         &self,
         state: &mut Self::State,
         button: &mut MenuUnit<Self::Message>,
+        message: Self::Message,
         timestamp: u32,
     ) -> EventUpdate {
         EventUpdate::None
@@ -671,22 +711,24 @@ pub trait OnClickedFn<State, Message: Clone> {
         &self,
         state: &mut State,
         button: &mut MenuUnit<Message>,
+        message: Message,
         timestamp: u32,
     ) -> EventUpdate;
 }
 
 impl<T, State, Message> OnClickedFn<State, Message> for T
 where
-    T: Fn(&mut State, &mut MenuUnit<Message>, u32) -> EventUpdate,
+    T: Fn(&mut State, &mut MenuUnit<Message>, Message, u32) -> EventUpdate,
     Message: Clone,
 {
     fn on_clicked(
         &self,
         state: &mut State,
         button: &mut MenuUnit<Message>,
+        message: Message,
         timestamp: u32,
     ) -> EventUpdate {
-        self(state, button, timestamp)
+        self(state, button, message, timestamp)
     }
 }
 
@@ -822,7 +864,7 @@ where
     ) -> zbus::fdo::Result<()> {
         let menu = self.menu_tree.get_unit_mut();
 
-        let Some(button) = menu.find_menu_by_id_mut(id) else {
+        let Some((button, message)) = menu.find_menu_and_message_by_id_mut(id) else {
             return Ok(());
         };
         let need_update = match event_id.as_str() {
@@ -830,7 +872,8 @@ where
                 if !matches!(button.unit_type(), MenuType::Button | MenuType::RadioGroup) {
                     return Ok(());
                 }
-                self.program.on_clicked(&mut self.state, button, timestamp)
+                self.program
+                    .on_clicked(&mut self.state, button, message, timestamp)
             }
             _ => EventUpdate::None,
         };
@@ -860,7 +903,7 @@ where
         let mut update_parents: Vec<i32> = vec![];
         for (id, event_id, _data, timestamp) in events {
             let menu = self.menu_tree.get_unit_mut();
-            let Some(button) = menu.find_menu_by_id_mut(id) else {
+            let Some((button, message)) = menu.find_menu_and_message_by_id_mut(id) else {
                 continue;
             };
 
@@ -869,7 +912,8 @@ where
                     if !matches!(button.unit_type(), MenuType::Button | MenuType::RadioGroup) {
                         continue;
                     }
-                    self.program.on_clicked(&mut self.state, button, timestamp)
+                    self.program
+                        .on_clicked(&mut self.state, button, message, timestamp)
                 }
                 _ => {
                     continue;
