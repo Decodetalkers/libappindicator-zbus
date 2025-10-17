@@ -1,6 +1,6 @@
 use libappindicator_zbus::{
     tray,
-    utils::{ButtonOptions, Category, EventUpdate, MenuStatus, MenuUnit, TextDirection},
+    utils::{ButtonOptions, Category, EventUpdate, MenuStatus, MenuTree, MenuUnit, TextDirection},
 };
 use zbus::fdo::Result;
 
@@ -35,7 +35,7 @@ enum Message {
 
 #[allow(unused)]
 struct Menu {
-    menu: MenuUnit<Message>,
+    menu: MenuTree<Message>,
 }
 
 impl Menu {
@@ -44,8 +44,8 @@ impl Menu {
         Menu { menu }
     }
 
-    fn menu() -> MenuUnit<Message> {
-        MenuUnit::root()
+    fn menu() -> MenuTree<Message> {
+        MenuTree::new()
             .push_sub_menu(MenuUnit::button(
                 ButtonOptions {
                     label: "Hello".to_owned(),

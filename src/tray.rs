@@ -12,7 +12,7 @@ use crate::{
         ToolTipFn, WindowIdFn,
     },
     status_notifier_watcher::StatusNotifierWatcherProxy,
-    utils::{Category, IconPixmap, TextDirection, ToolTip},
+    utils::{Category, IconPixmap, MenuTree, TextDirection, ToolTip},
 };
 use std::marker::PhantomData;
 
@@ -62,14 +62,14 @@ where
         Ok(f(&mut data.state))
     }
 
-    pub async fn update_full_menu(&self, menu: MenuUnit<M::Message>) -> zbus::Result<()> {
+    pub async fn update_full_menu(&self, menu_tree: MenuTree<M::Message>) -> zbus::Result<()> {
         let iface_ref = self
             .conn
             .object_server()
             .interface::<_, DBusMenuInstance<M>>("/MenuBar")
             .await?;
         let mut data = iface_ref.get_mut().await;
-        data.menu = menu;
+        data.menu_tree = menu_tree;
         let _ = DBusMenuInstance::<M>::layout_updated(
             iface_ref.signal_emitter(),
             data.program.revision(&data.state),
@@ -154,7 +154,7 @@ where
         let instance_menu = DBusMenuInstance {
             program: self.menu_raw,
             state: menu_state,
-            menu,
+            menu_tree: menu,
         };
         let conn = connection::Builder::session()?
             .serve_at("/StatusNotifierItem", instance)?
@@ -2003,7 +2003,7 @@ fn with_menu_status<M: DBusMenuItem>(
             self.program.revision(state)
         }
 
-        fn menu(&self) -> MenuUnit<M::Message> {
+        fn menu(&self) -> MenuTree<M::Message> {
             self.program.menu()
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2063,7 +2063,7 @@ fn with_on_clicked<M: DBusMenuItem>(
             self.program.revision(state)
         }
 
-        fn menu(&self) -> MenuUnit<M::Message> {
+        fn menu(&self) -> MenuTree<M::Message> {
             self.program.menu()
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2124,7 +2124,7 @@ fn with_text_direction<M: DBusMenuItem>(
             self.program.revision(state)
         }
 
-        fn menu(&self) -> MenuUnit<M::Message> {
+        fn menu(&self) -> MenuTree<M::Message> {
             self.program.menu()
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2185,7 +2185,7 @@ fn with_menu_icon_theme_path<M: DBusMenuItem>(
             self.program.revision(state)
         }
 
-        fn menu(&self) -> MenuUnit<M::Message> {
+        fn menu(&self) -> MenuTree<M::Message> {
             self.program.menu()
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2245,7 +2245,7 @@ fn with_about_to_show<M: DBusMenuItem>(
             self.program.revision(state)
         }
 
-        fn menu(&self) -> MenuUnit<M::Message> {
+        fn menu(&self) -> MenuTree<M::Message> {
             self.program.menu()
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2306,7 +2306,7 @@ fn with_about_to_show_group<M: DBusMenuItem>(
         fn revision(&self, state: &Self::State) -> u32 {
             self.program.revision(state)
         }
-        fn menu(&self) -> MenuUnit<M::Message> {
+        fn menu(&self) -> MenuTree<M::Message> {
             self.program.menu()
         }
         fn about_to_show(&self, state: &mut Self::State, id: i32) -> zbus::fdo::Result<bool> {
@@ -2411,7 +2411,7 @@ where
         fn revision(&self, state: &Self::State) -> u32 {
             self.revision.revision(state)
         }
-        fn menu(&self) -> MenuUnit<Message> {
+        fn menu(&self) -> MenuTree<Message> {
             self.menu.menu()
         }
     }

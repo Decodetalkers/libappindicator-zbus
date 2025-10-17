@@ -80,7 +80,9 @@ impl MenuProperty {
     }
 }
 
-#[derive(Type, Debug, Serialize, Deserialize, OwnedValue, Value, Clone)]
+#[derive(
+    Type, Debug, Serialize, Deserialize, OwnedValue, Value, Clone, Copy, PartialEq, PartialOrd,
+)]
 pub struct Id(i32);
 
 static COUNT: AtomicI32 = AtomicI32::new(1);
@@ -102,21 +104,62 @@ impl Deref for Id {
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
-enum MenuType {
+pub enum MenuType {
     Root,
     SubMenu,
     Button,
+    RadioGroup,
 }
 
 #[derive(Debug, Clone)]
-pub struct MenuUnit<Message: Clone> {
-    id: Id,
-    tp: MenuType,
-    pub property: MenuProperty,
-    pub sub_menus: Vec<MenuUnit<Message>>,
-    pub message: Option<Message>,
+pub enum MenuUnit<Message: Clone> {
+    StandardButton {
+        id: Id,
+        options: ButtonOptions,
+        message: Message,
+    },
+    Root {
+        sub_menus: Vec<MenuUnit<Message>>,
+    },
+    SubMenu {
+        id: Id,
+        label: String,
+        sub_menus: Vec<MenuUnit<Message>>,
+    },
+    RadioGroup {
+        selections: Vec<MenuUnit<Message>>,
+    },
+    RadioButton {
+        id: Id,
+        options: RadioOptions,
+        message: Message,
+    },
 }
 
+#[derive(Debug, Clone)]
+pub struct MenuTree<Message: Clone>(MenuUnit<Message>);
+
+impl<Message: Clone> MenuTree<Message> {
+    pub fn new() -> Self {
+        Self(MenuUnit::root())
+    }
+    pub fn push_sub_menu(mut self, menu: MenuUnit<Message>) -> Self {
+        self.0 = self.0.push_sub_menu(menu);
+        self
+    }
+    fn get_unit_mut(&mut self) -> &mut MenuUnit<Message> {
+        &mut self.0
+    }
+    pub fn get_unit(&self) -> &MenuUnit<Message> {
+        &self.0
+    }
+}
+
+impl<Message: Clone> From<&MenuTree<Message>> for MenuItem {
+    fn from(value: &MenuTree<Message>) -> Self {
+        (&value.0).into()
+    }
+}
 #[derive(Debug, Clone, Default)]
 pub struct ButtonOptions {
     pub label: String,
@@ -124,70 +167,207 @@ pub struct ButtonOptions {
     pub icon_name: String,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct RadioOptions {
+    pub label: String,
+    pub enabled: bool,
+    pub icon_name: String,
+    pub toggle_type: ToggleType,
+    pub toggle_state: ToggleState,
+}
+
+#[derive(Debug, Clone)]
+pub struct RadioInitOption<Message: Clone> {
+    pub options: RadioOptions,
+    pub message: Message,
+}
+
 impl<Message: Clone> From<&MenuUnit<Message>> for MenuItem {
     fn from(value: &MenuUnit<Message>) -> Self {
+        let IdOrGroup::Id(id) = value.id_or_ids() else {
+            panic!("RadioGroup should not be here");
+        };
         let mut output = MenuItem {
-            id: value.id.clone(),
-            property: value.property.clone(),
+            id,
+            property: value.get_property().expect("RadioGroup should not be here"),
             sub_menus: vec![],
         };
-        for sub_menu in &value.sub_menus {
-            output = output.push_sub_menu(sub_menu.into());
+        let Some(sub_menus) = value.sub_menus() else {
+            return output;
+        };
+        for sub_menu in sub_menus {
+            if let MenuUnit::RadioGroup { selections, .. } = sub_menu {
+                for selection in selections {
+                    output = output.push_sub_menu(selection.into());
+                }
+            } else {
+                output = output.push_sub_menu(sub_menu.into());
+            }
         }
         output
     }
 }
 
+enum IdOrGroup {
+    Id(Id),
+    Groups(Vec<Id>),
+}
+
+impl IdOrGroup {
+    fn contains_id(&self, id: i32) -> bool {
+        let id = Id(id);
+        match self {
+            IdOrGroup::Id(oid) => *oid == id,
+            IdOrGroup::Groups(ids) => ids.contains(&id),
+        }
+    }
+}
+
 impl<Message: Clone> MenuUnit<Message> {
-    pub fn button(
-        ButtonOptions {
-            label,
-            enabled,
-            icon_name,
-        }: ButtonOptions,
-        message: Message,
-    ) -> Self {
-        Self {
-            tp: MenuType::Button,
-            id: Id::unique(),
-            property: MenuProperty {
-                label: Some(label),
-                enabled: Some(enabled),
-                icon_name: Some(icon_name),
+    pub fn try_change_label(&mut self, new_label: String) {
+        match self {
+            Self::RadioButton {
+                options: RadioOptions { label, .. },
+                ..
+            }
+            | Self::SubMenu { label, .. }
+            | Self::StandardButton {
+                options: ButtonOptions { label, .. },
+                ..
+            } => {
+                *label = new_label;
+            }
+            _ => {}
+        }
+    }
+    fn get_property(&self) -> Option<MenuProperty> {
+        match self {
+            Self::Root { .. } => Some(MenuProperty::root()),
+            Self::SubMenu { label, .. } => Some(MenuProperty::submenu(label.clone())),
+            Self::StandardButton {
+                options:
+                    ButtonOptions {
+                        label,
+                        enabled,
+                        icon_name,
+                    },
+                ..
+            } => Some(MenuProperty {
+                label: Some(label.clone()),
+                icon_name: Some(icon_name.clone()),
+                enabled: Some(*enabled),
                 ..Default::default()
-            },
-            sub_menus: vec![],
-            message: Some(message),
+            }),
+            Self::RadioButton {
+                options:
+                    RadioOptions {
+                        label,
+                        enabled,
+                        icon_name,
+                        toggle_state,
+                        toggle_type,
+                    },
+                ..
+            } => Some(MenuProperty {
+                label: Some(label.clone()),
+                icon_name: Some(icon_name.clone()),
+                enabled: Some(*enabled),
+                toggle_type: Some(*toggle_type),
+                toggle_state: Some(*toggle_state),
+                ..Default::default()
+            }),
+            Self::RadioGroup { .. } => None,
+        }
+    }
+    pub fn sub_menus(&self) -> Option<&Vec<Self>> {
+        match self {
+            Self::Root { sub_menus } | Self::SubMenu { sub_menus, .. } => Some(sub_menus),
+            _ => None,
+        }
+    }
+    pub fn sub_menus_mut(&mut self) -> Option<&mut Vec<Self>> {
+        match self {
+            Self::Root { sub_menus } | Self::SubMenu { sub_menus, .. } => Some(sub_menus),
+            _ => None,
+        }
+    }
+    fn id_or_ids(&self) -> IdOrGroup {
+        match self {
+            Self::Root { .. } => IdOrGroup::Id(Id::MAIN),
+            Self::SubMenu { id, .. }
+            | Self::StandardButton { id, .. }
+            | Self::RadioButton { id, .. } => IdOrGroup::Id(*id),
+            Self::RadioGroup { selections, .. } => {
+                let mut groups = vec![];
+                for selection in selections {
+                    match selection.id_or_ids() {
+                        IdOrGroup::Id(id) => groups.push(id),
+                        IdOrGroup::Groups(mut ids) => {
+                            groups.append(&mut ids);
+                        }
+                    }
+                }
+                IdOrGroup::Groups(groups)
+            }
+        }
+    }
+    pub fn button(options: ButtonOptions, message: Message) -> Self {
+        Self::StandardButton {
+            id: Id::unique(),
+            options,
+            message,
         }
     }
     pub fn root() -> Self {
-        Self {
-            id: Id::MAIN,
-            tp: MenuType::Root,
-            property: MenuProperty::root(),
-            sub_menus: vec![],
-            message: None,
-        }
+        Self::Root { sub_menus: vec![] }
     }
     pub fn sub_menu(label: String) -> Self {
-        Self {
+        Self::SubMenu {
             id: Id::unique(),
-            tp: MenuType::SubMenu,
-            property: MenuProperty::submenu(label),
+            label,
             sub_menus: vec![],
-            message: None,
         }
     }
+
+    pub fn toggle_group(init_options: Vec<RadioInitOption<Message>>) -> Self {
+        let selections = init_options
+            .into_iter()
+            .map(
+                |RadioInitOption { options, message }| MenuUnit::RadioButton {
+                    id: Id::unique(),
+                    options,
+                    message,
+                },
+            )
+            .collect();
+        Self::RadioGroup { selections }
+    }
+
     pub fn push_sub_menu(mut self, menu: Self) -> Self {
-        self.sub_menus.push(menu);
+        let Some(sub_menus) = self.sub_menus_mut() else {
+            return self;
+        };
+        sub_menus.push(menu);
         self
     }
 
+    pub fn unit_type(&self) -> MenuType {
+        match self {
+            MenuUnit::Root { .. } => MenuType::Root,
+            MenuUnit::SubMenu { .. } => MenuType::SubMenu,
+            MenuUnit::RadioGroup { .. } => MenuType::RadioGroup,
+            MenuUnit::StandardButton { .. } | MenuUnit::RadioButton { .. } => MenuType::Button,
+        }
+    }
+
     pub fn find_menu_by_id(&self, id: i32) -> Option<&Self> {
-        if *self.id == id {
+        if self.id_or_ids().contains_id(id) {
             return Some(self);
         }
-        for menu in &self.sub_menus {
+        let Some(sub_menus) = self.sub_menus() else {
+            return None;
+        };
+        for menu in sub_menus {
             if let Some(menu) = menu.find_menu_by_id(id) {
                 return Some(menu);
             }
@@ -195,10 +375,13 @@ impl<Message: Clone> MenuUnit<Message> {
         None
     }
     pub fn find_menu_by_id_mut(&mut self, id: i32) -> Option<&mut Self> {
-        if *self.id == id {
+        if self.id_or_ids().contains_id(id) {
             return Some(self);
         }
-        for menu in &mut self.sub_menus {
+        let Some(sub_menus) = self.sub_menus_mut() else {
+            return None;
+        };
+        for menu in sub_menus {
             if let Some(menu) = menu.find_menu_by_id_mut(id) {
                 return Some(menu);
             }
@@ -346,7 +529,7 @@ pub trait DBusMenuItem {
 
     fn boot(&self) -> Self::State;
 
-    fn menu(&self) -> MenuUnit<Self::Message>;
+    fn menu(&self) -> MenuTree<Self::Message>;
 
     fn revision(&self, state: &Self::State) -> u32;
 
@@ -393,7 +576,7 @@ pub trait DBusMenuItem {
 pub struct DBusMenuInstance<Menu: DBusMenuItem> {
     pub(crate) program: Menu,
     pub(crate) state: Menu::State,
-    pub(crate) menu: MenuUnit<Menu::Message>,
+    pub(crate) menu_tree: MenuTree<Menu::Message>,
 }
 
 pub trait DBusMenuBootFn<State> {
@@ -410,14 +593,14 @@ where
 }
 
 pub trait MenuBootFn<Message: Clone> {
-    fn menu(&self) -> MenuUnit<Message>;
+    fn menu(&self) -> MenuTree<Message>;
 }
 
-impl<Message> MenuBootFn<Message> for MenuUnit<Message>
+impl<Message> MenuBootFn<Message> for MenuTree<Message>
 where
     Message: Clone,
 {
-    fn menu(&self) -> MenuUnit<Message> {
+    fn menu(&self) -> MenuTree<Message> {
         self.clone()
     }
 }
@@ -425,9 +608,9 @@ where
 impl<T, Message> MenuBootFn<Message> for T
 where
     Message: Clone,
-    T: Fn() -> MenuUnit<Message>,
+    T: Fn() -> MenuTree<Message>,
 {
-    fn menu(&self) -> MenuUnit<Message> {
+    fn menu(&self) -> MenuTree<Message> {
         self()
     }
 }
@@ -591,7 +774,7 @@ where
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<(u32, MenuItem)> {
         let property_names: Vec<&str> = property_names.iter().map(|name| name.as_str()).collect();
-        let menuitem: MenuItem = (&self.menu).into();
+        let menuitem: MenuItem = (&self.menu_tree).into();
         Ok((
             self.program.revision(&self.state),
             menuitem
@@ -600,21 +783,17 @@ where
         ))
     }
 
-    // NOTE: this should not implemented by user
-    /// GetGroupProperties method
     fn get_group_properties(
         &mut self,
         ids: Vec<i32>,
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        let menuitem: MenuItem = (&self.menu).into();
+        let menuitem: MenuItem = (&self.menu_tree).into();
         Ok(menuitem.get_property_groups(ids, property_names))
     }
 
-    // NOTE: this should not implemented by user
-    /// GetProperty method
     fn get_property(&mut self, id: i32, name: String) -> zbus::fdo::Result<PropertyItem> {
-        let menuitem: MenuItem = (&self.menu).into();
+        let menuitem: MenuItem = (&self.menu_tree).into();
         menuitem
             .get_property(id, name)
             .ok_or(zbus::fdo::Error::Failed("Unfounded".to_string()))
@@ -641,14 +820,14 @@ where
         timestamp: u32,
         #[zbus(signal_emitter)] cxts: SignalEmitter<'_>,
     ) -> zbus::fdo::Result<()> {
-        let menu = &mut self.menu;
+        let menu = self.menu_tree.get_unit_mut();
 
         let Some(button) = menu.find_menu_by_id_mut(id) else {
             return Ok(());
         };
         let need_update = match event_id.as_str() {
             "clicked" => {
-                if !matches!(button.tp, MenuType::Button) {
+                if !matches!(button.unit_type(), MenuType::Button | MenuType::RadioGroup) {
                     return Ok(());
                 }
                 self.program.on_clicked(&mut self.state, button, timestamp)
@@ -680,14 +859,14 @@ where
         let mut update_all = false;
         let mut update_parents: Vec<i32> = vec![];
         for (id, event_id, _data, timestamp) in events {
-            let menu = &mut self.menu;
+            let menu = self.menu_tree.get_unit_mut();
             let Some(button) = menu.find_menu_by_id_mut(id) else {
                 continue;
             };
 
             let need_update = match event_id.as_str() {
                 "clicked" => {
-                    if !matches!(button.tp, MenuType::Button) {
+                    if !matches!(button.unit_type(), MenuType::Button | MenuType::RadioGroup) {
                         continue;
                     }
                     self.program.on_clicked(&mut self.state, button, timestamp)
@@ -704,7 +883,9 @@ where
                     update_all = true;
                 }
                 EventUpdate::UpdateCurrent => {
-                    update_parents.push(*menu.id);
+                    if let IdOrGroup::Id(id) = menu.id_or_ids() {
+                        update_parents.push(*id);
+                    }
                 }
             };
             output.push(id);

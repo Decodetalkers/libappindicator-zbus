@@ -1,6 +1,9 @@
 use libappindicator_zbus::{
     tray,
-    utils::{ButtonOptions, Category, EventUpdate, IconPixmap, MenuStatus, MenuUnit},
+    utils::{
+        ButtonOptions, Category, EventUpdate, IconPixmap, MenuStatus, MenuTree, MenuUnit,
+        RadioInitOption, RadioOptions,
+    },
 };
 use zbus::fdo::Result;
 
@@ -59,8 +62,8 @@ impl Menu {
         }
     }
 
-    fn menu() -> MenuUnit<Message> {
-        MenuUnit::root()
+    fn menu() -> MenuTree<Message> {
+        MenuTree::new()
             .push_sub_menu(MenuUnit::button(
                 ButtonOptions {
                     label: "Hello".to_owned(),
@@ -77,6 +80,24 @@ impl Menu {
                 },
                 Message::Toggled,
             ))
+            .push_sub_menu(MenuUnit::toggle_group(vec![
+                RadioInitOption {
+                    options: RadioOptions {
+                        label: "A".to_owned(),
+                        enabled: true,
+                        ..Default::default()
+                    },
+                    message: Message::Toggled,
+                },
+                RadioInitOption {
+                    options: RadioOptions {
+                        label: "B".to_owned(),
+                        enabled: true,
+                        ..Default::default()
+                    },
+                    message: Message::Toggled,
+                },
+            ]))
     }
     fn status(&self) -> MenuStatus {
         MenuStatus::Normal
@@ -85,14 +106,10 @@ impl Menu {
         self.reversion
     }
     fn on_clicked(&mut self, button: &mut MenuUnit<Message>, _timestamp: u32) -> EventUpdate {
-        println!("Yes, here!");
+        println!("button {:?}", button);
         self.reversion += 1;
         self.time += 1;
-        if let Some(label) = &mut button.property.label {
-            println!("{label}");
-            *label = format!("Hello{}", self.time);
-        }
-        println!("{:?}", button.property);
+        button.try_change_label(format!("Hello{}", self.time));
         EventUpdate::UpdateAll
     }
 }
