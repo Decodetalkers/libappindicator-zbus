@@ -62,6 +62,23 @@ where
         Ok(f(&mut data.state))
     }
 
+    pub async fn update_full_menu(&self, menu: MenuUnit<M::Message>) -> zbus::Result<()> {
+        let iface_ref = self
+            .conn
+            .object_server()
+            .interface::<_, DBusMenuInstance<M>>("/MenuBar")
+            .await?;
+        let mut data = iface_ref.get_mut().await;
+        data.menu = menu;
+        let _ = DBusMenuInstance::<M>::layout_updated(
+            iface_ref.signal_emitter(),
+            data.program.revision(&data.state),
+            *crate::dbusmenu::Id::MAIN,
+        )
+        .await;
+        Ok(())
+    }
+
     pub async fn update_state<F, R>(&self, f: F) -> zbus::Result<R>
     where
         F: Fn(&mut P::State, &mut M::State) -> R,

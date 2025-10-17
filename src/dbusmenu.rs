@@ -86,7 +86,7 @@ pub struct Id(i32);
 static COUNT: AtomicI32 = AtomicI32::new(1);
 
 impl Id {
-    const MAIN: Self = Id(0);
+    pub const MAIN: Self = Id(0);
     /// Creates a new unique window [`Id`].
     pub fn unique() -> Id {
         Id(COUNT.fetch_add(1, atomic::Ordering::Relaxed))
