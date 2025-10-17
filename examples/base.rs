@@ -33,13 +33,19 @@ enum Message {
     Toggled,
 }
 
+#[allow(unused)]
 struct Menu {
     menu: MenuUnit<Message>,
 }
 
 impl Menu {
     fn boot() -> Self {
-        let menu = MenuUnit::root()
+        let menu = Self::menu();
+        Menu { menu }
+    }
+
+    fn menu() -> MenuUnit<Message> {
+        MenuUnit::root()
             .push_sub_menu(MenuUnit::button(
                 ButtonOptions {
                     label: "Hello".to_owned(),
@@ -65,20 +71,15 @@ impl Menu {
                     },
                     Message::Clicked,
                 )),
-            );
-        Menu { menu }
-    }
-
-    fn menu(&self) -> &MenuUnit<Message> {
-        &self.menu
+            )
     }
 
     fn status(&self) -> MenuStatus {
         MenuStatus::Normal
     }
 
-    fn on_clicked(&mut self, message: Message, _timestamp: u32) -> EventUpdate {
-        println!("message: {message:?}");
+    fn on_clicked(&mut self, button: &mut MenuUnit<Message>, _timestamp: u32) -> EventUpdate {
+        println!("message: {button:?}");
         EventUpdate::None
     }
 }

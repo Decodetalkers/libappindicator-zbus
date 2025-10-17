@@ -47,12 +47,20 @@ enum Message {
 }
 
 struct Menu {
-    menu: MenuUnit<Message>,
+    time: u32,
+    reversion: u32,
 }
 
 impl Menu {
     fn boot() -> Self {
-        let menu = MenuUnit::root()
+        Menu {
+            time: 0,
+            reversion: 0,
+        }
+    }
+
+    fn menu() -> MenuUnit<Message> {
+        MenuUnit::root()
             .push_sub_menu(MenuUnit::button(
                 ButtonOptions {
                     label: "Hello".to_owned(),
@@ -68,20 +76,24 @@ impl Menu {
                     enabled: true,
                 },
                 Message::Toggled,
-            ));
-        Menu { menu }
-    }
-
-    fn menu(&self) -> &MenuUnit<Message> {
-        &self.menu
+            ))
     }
     fn status(&self) -> MenuStatus {
         MenuStatus::Normal
     }
-
-    fn on_clicked(&mut self, _message: Message, _timestamp: u32) -> EventUpdate {
+    fn reversion(&self) -> u32 {
+        self.reversion
+    }
+    fn on_clicked(&mut self, button: &mut MenuUnit<Message>, _timestamp: u32) -> EventUpdate {
         println!("Yes, here!");
-        EventUpdate::None
+        self.reversion += 1;
+        self.time += 1;
+        if let Some(label) = &mut button.property.label {
+            println!("{label}");
+            *label = format!("Hello{}", self.time);
+        }
+        println!("{:?}", button.property);
+        EventUpdate::UpdateAll
     }
 }
 
@@ -93,7 +105,7 @@ async fn main() {
         "pixmap_test",
         Menu::boot,
         Menu::menu,
-        1,
+        Menu::reversion,
     )
     .with_item_is_menu(false)
     .with_icon_pixmap(Base::icon_pixmap)

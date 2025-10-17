@@ -194,6 +194,17 @@ impl<Message: Clone> MenuUnit<Message> {
         }
         None
     }
+    pub fn find_menu_by_id_mut(&mut self, id: i32) -> Option<&mut Self> {
+        if *self.id == id {
+            return Some(self);
+        }
+        for menu in &mut self.sub_menus {
+            if let Some(menu) = menu.find_menu_by_id_mut(id) {
+                return Some(menu);
+            }
+        }
+        None
+    }
 }
 
 #[derive(Type, Debug, Serialize, Deserialize, OwnedValue, Value, Clone)]
@@ -335,7 +346,7 @@ pub trait DBusMenuItem {
 
     fn boot(&self) -> Self::State;
 
-    fn menu<'a>(&'a self, state: &'a Self::State) -> &'a MenuUnit<Self::Message>;
+    fn menu(&self) -> MenuUnit<Self::Message>;
 
     fn revision(&self, state: &Self::State) -> u32;
 
@@ -362,7 +373,7 @@ pub trait DBusMenuItem {
     fn on_clicked(
         &self,
         state: &mut Self::State,
-        message: Self::Message,
+        button: &mut MenuUnit<Self::Message>,
         timestamp: u32,
     ) -> EventUpdate {
         EventUpdate::None
@@ -382,6 +393,7 @@ pub trait DBusMenuItem {
 pub struct DBusMenuInstance<Menu: DBusMenuItem> {
     pub(crate) program: Menu,
     pub(crate) state: Menu::State,
+    pub(crate) menu: MenuUnit<Menu::Message>,
 }
 
 pub trait DBusMenuBootFn<State> {
@@ -393,6 +405,29 @@ where
     T: Fn() -> State,
 {
     fn boot(&self) -> State {
+        self()
+    }
+}
+
+pub trait MenuBootFn<Message: Clone> {
+    fn menu(&self) -> MenuUnit<Message>;
+}
+
+impl<Message> MenuBootFn<Message> for MenuUnit<Message>
+where
+    Message: Clone,
+{
+    fn menu(&self) -> MenuUnit<Message> {
+        self.clone()
+    }
+}
+
+impl<T, Message> MenuBootFn<Message> for T
+where
+    Message: Clone,
+    T: Fn() -> MenuUnit<Message>,
+{
+    fn menu(&self) -> MenuUnit<Message> {
         self()
     }
 }
@@ -448,16 +483,27 @@ impl<State> RevisionFn<State> for u32 {
     }
 }
 
-pub trait OnClickedFn<State, Message> {
-    fn on_clicked(&self, state: &mut State, message: Message, timestamp: u32) -> EventUpdate;
+pub trait OnClickedFn<State, Message: Clone> {
+    fn on_clicked(
+        &self,
+        state: &mut State,
+        button: &mut MenuUnit<Message>,
+        timestamp: u32,
+    ) -> EventUpdate;
 }
 
 impl<T, State, Message> OnClickedFn<State, Message> for T
 where
-    T: Fn(&mut State, Message, u32) -> EventUpdate,
+    T: Fn(&mut State, &mut MenuUnit<Message>, u32) -> EventUpdate,
+    Message: Clone,
 {
-    fn on_clicked(&self, state: &mut State, message: Message, timestamp: u32) -> EventUpdate {
-        self(state, message, timestamp)
+    fn on_clicked(
+        &self,
+        state: &mut State,
+        button: &mut MenuUnit<Message>,
+        timestamp: u32,
+    ) -> EventUpdate {
+        self(state, button, timestamp)
     }
 }
 
@@ -545,7 +591,7 @@ where
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<(u32, MenuItem)> {
         let property_names: Vec<&str> = property_names.iter().map(|name| name.as_str()).collect();
-        let menuitem: MenuItem = self.program.menu(&self.state).into();
+        let menuitem: MenuItem = (&self.menu).into();
         Ok((
             self.program.revision(&self.state),
             menuitem
@@ -561,14 +607,14 @@ where
         ids: Vec<i32>,
         property_names: Vec<String>,
     ) -> zbus::fdo::Result<Vec<PropertyItem>> {
-        let menuitem: MenuItem = self.program.menu(&self.state).into();
+        let menuitem: MenuItem = (&self.menu).into();
         Ok(menuitem.get_property_groups(ids, property_names))
     }
 
     // NOTE: this should not implemented by user
     /// GetProperty method
     fn get_property(&mut self, id: i32, name: String) -> zbus::fdo::Result<PropertyItem> {
-        let menuitem: MenuItem = self.program.menu(&self.state).into();
+        let menuitem: MenuItem = (&self.menu).into();
         menuitem
             .get_property(id, name)
             .ok_or(zbus::fdo::Error::Failed("Unfounded".to_string()))
@@ -593,10 +639,11 @@ where
         event_id: String,
         _data: zbus::zvariant::OwnedValue,
         timestamp: u32,
-        #[zbus(object_server)] server: &zbus::ObjectServer,
+        #[zbus(signal_emitter)] cxts: SignalEmitter<'_>,
     ) -> zbus::fdo::Result<()> {
-        let menu = self.program.menu(&self.state).clone();
-        let Some(button) = menu.find_menu_by_id(id) else {
+        let menu = &mut self.menu;
+
+        let Some(button) = menu.find_menu_by_id_mut(id) else {
             return Ok(());
         };
         let need_update = match event_id.as_str() {
@@ -604,34 +651,18 @@ where
                 if !matches!(button.tp, MenuType::Button) {
                     return Ok(());
                 }
-                self.program
-                    .on_clicked(&mut self.state, button.message.clone().unwrap(), timestamp)
+                self.program.on_clicked(&mut self.state, button, timestamp)
             }
             _ => EventUpdate::None,
         };
+
         let revision = self.program.revision(&self.state);
         match need_update {
             EventUpdate::UpdateCurrent => {
-                let iface_rf = server
-                    .interface::<_, DBusMenuInstance<Menu>>("/MenuBar")
-                    .await?;
-                let _ = DBusMenuInstance::<Menu>::layout_updated(
-                    iface_rf.signal_emitter(),
-                    revision,
-                    id,
-                )
-                .await;
+                let _ = DBusMenuInstance::<Menu>::layout_updated(&cxts, revision, id).await;
             }
             EventUpdate::UpdateAll => {
-                let iface_rf = server
-                    .interface::<_, DBusMenuInstance<Menu>>("/MenuBar")
-                    .await?;
-                let _ = DBusMenuInstance::<Menu>::layout_updated(
-                    iface_rf.signal_emitter(),
-                    revision,
-                    *Id::MAIN,
-                )
-                .await;
+                let _ = DBusMenuInstance::<Menu>::layout_updated(&cxts, revision, *Id::MAIN).await;
             }
             _ => {}
         }
@@ -643,14 +674,14 @@ where
     async fn event_group(
         &mut self,
         events: Vec<(i32, String, zbus::zvariant::OwnedValue, u32)>,
-        #[zbus(object_server)] server: &zbus::ObjectServer,
+        #[zbus(signal_emitter)] cxts: SignalEmitter<'_>,
     ) -> zbus::fdo::Result<Vec<i32>> {
         let mut output = vec![];
         let mut update_all = false;
         let mut update_parents: Vec<i32> = vec![];
         for (id, event_id, _data, timestamp) in events {
-            let menu = self.program.menu(&self.state).clone();
-            let Some(button) = menu.find_menu_by_id(id) else {
+            let menu = &mut self.menu;
+            let Some(button) = menu.find_menu_by_id_mut(id) else {
                 continue;
             };
 
@@ -659,11 +690,7 @@ where
                     if !matches!(button.tp, MenuType::Button) {
                         continue;
                     }
-                    self.program.on_clicked(
-                        &mut self.state,
-                        button.message.clone().unwrap(),
-                        timestamp,
-                    )
+                    self.program.on_clicked(&mut self.state, button, timestamp)
                 }
                 _ => {
                     continue;
@@ -684,26 +711,10 @@ where
         }
         let revision = self.program.revision(&self.state);
         if update_all {
-            let iface_rf = server
-                .interface::<_, DBusMenuInstance<Menu>>("/MenuBar")
-                .await?;
-            let _ = DBusMenuInstance::<Menu>::layout_updated(
-                iface_rf.signal_emitter(),
-                revision,
-                *Id::MAIN,
-            )
-            .await;
+            let _ = DBusMenuInstance::<Menu>::layout_updated(&cxts, revision, *Id::MAIN).await;
         } else {
             for id in update_parents {
-                let iface_rf = server
-                    .interface::<_, DBusMenuInstance<Menu>>("/MenuBar")
-                    .await?;
-                let _ = DBusMenuInstance::<Menu>::layout_updated(
-                    iface_rf.signal_emitter(),
-                    revision,
-                    id,
-                )
-                .await;
+                let _ = DBusMenuInstance::<Menu>::layout_updated(&cxts, revision, id).await;
             }
         }
         Ok(output)
