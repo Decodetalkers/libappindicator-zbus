@@ -14,7 +14,7 @@ use crate::{
     status_notifier_watcher::StatusNotifierWatcherProxy,
     utils::{Category, IconPixmap, MenuTree, TextDirection, ToolTip},
 };
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
 use zbus::connection;
 
@@ -23,54 +23,53 @@ pub struct Tray<P: StatusNotifierItem, M: DBusMenuItem> {
     menu_raw: M,
 }
 
-pub struct TrayConnection<P: StatusNotifierItem, M: DBusMenuItem> {
+pub struct TrayConnection<State, MenuState, Message> {
     conn: zbus::Connection,
-    _notify_item: PhantomData<P>,
-    _menu_item: PhantomData<M>,
+    _state: PhantomData<State>,
+    _menu_state: PhantomData<MenuState>,
+    _message: PhantomData<Message>,
 }
 
-impl<P: StatusNotifierItem, M: DBusMenuItem> TrayConnection<P, M>
+impl<State, MenuState, Message> TrayConnection<State, MenuState, Message>
 where
-    P::State: 'static + Send + Sync,
-    P: Send + Sync + 'static,
-    M::State: 'static + Send + Sync,
-    M::Message: 'static + Send + Sync,
-    M: Send + Sync + 'static,
+    State: 'static + Send + Sync,
+    Message: 'static + Send + Sync + Clone,
+    MenuState: 'static + Send + Sync,
 {
     pub async fn update_notify_state<F, R>(&self, f: F) -> zbus::Result<R>
     where
-        F: Fn(&mut P::State) -> R,
+        F: Fn(&mut State) -> R,
     {
         let iface_ref = self
             .conn
             .object_server()
-            .interface::<_, StatusNotifierInstance<P>>("/StatusNotifierItem")
+            .interface::<_, StatusNotifierInstance<State>>("/StatusNotifierItem")
             .await?;
         let mut data = iface_ref.get_mut().await;
         Ok(f(&mut data.state))
     }
     pub async fn update_menu_state<F, R>(&self, f: F) -> zbus::Result<R>
     where
-        F: Fn(&mut M::State) -> R,
+        F: Fn(&mut MenuState) -> R,
     {
         let iface_ref = self
             .conn
             .object_server()
-            .interface::<_, DBusMenuInstance<M>>("/MenuBar")
+            .interface::<_, DBusMenuInstance<MenuState, Message>>("/MenuBar")
             .await?;
         let mut data = iface_ref.get_mut().await;
         Ok(f(&mut data.state))
     }
 
-    pub async fn update_full_menu(&self, menu_tree: MenuTree<M::Message>) -> zbus::Result<()> {
+    pub async fn update_full_menu(&self, menu_tree: MenuTree<Message>) -> zbus::Result<()> {
         let iface_ref = self
             .conn
             .object_server()
-            .interface::<_, DBusMenuInstance<M>>("/MenuBar")
+            .interface::<_, DBusMenuInstance<MenuState, Message>>("/MenuBar")
             .await?;
         let mut data = iface_ref.get_mut().await;
         data.menu_tree = menu_tree;
-        let _ = DBusMenuInstance::<M>::layout_updated(
+        let _ = DBusMenuInstance::<MenuState, Message>::layout_updated(
             iface_ref.signal_emitter(),
             data.program.revision(&data.state),
             *crate::dbusmenu::Id::MAIN,
@@ -81,17 +80,17 @@ where
 
     pub async fn update_state<F, R>(&self, f: F) -> zbus::Result<R>
     where
-        F: Fn(&mut P::State, &mut M::State) -> R,
+        F: Fn(&mut State, &mut MenuState) -> R,
     {
         let iface_ref = self
             .conn
             .object_server()
-            .interface::<_, StatusNotifierInstance<P>>("/StatusNotifierItem")
+            .interface::<_, StatusNotifierInstance<State>>("/StatusNotifierItem")
             .await?;
         let menu_iface_ref = self
             .conn
             .object_server()
-            .interface::<_, DBusMenuInstance<M>>("/MenuBar")
+            .interface::<_, DBusMenuInstance<MenuState, Message>>("/MenuBar")
             .await?;
         let mut data = iface_ref.get_mut().await;
         let mut menu_data = menu_iface_ref.get_mut().await;
@@ -105,7 +104,7 @@ where
         let iface_ref = self
             .conn
             .object_server()
-            .interface::<_, StatusNotifierInstance<P>>("/StatusNotifierItem")
+            .interface::<_, StatusNotifierInstance<State>>("/StatusNotifierItem")
             .await?;
         let iface = iface_ref.get().await;
         iface.id_changed(iface_ref.signal_emitter()).await
@@ -115,19 +114,23 @@ where
         let iface_ref = self
             .conn
             .object_server()
-            .interface::<_, StatusNotifierInstance<P>>("/StatusNotifierItem")
+            .interface::<_, StatusNotifierInstance<State>>("/StatusNotifierItem")
             .await?;
-        StatusNotifierInstance::<P>::new_icon(iface_ref.signal_emitter()).await
+        StatusNotifierInstance::<State>::new_icon(iface_ref.signal_emitter()).await
     }
 
     pub async fn notify_layout_changed(&self, revision: u32, parent: i32) -> zbus::Result<()> {
         let iface_ref = self
             .conn
             .object_server()
-            .interface::<_, DBusMenuInstance<M>>("/MenuBar")
+            .interface::<_, DBusMenuInstance<MenuState, Message>>("/MenuBar")
             .await?;
-        let _ = DBusMenuInstance::<M>::layout_updated(iface_ref.signal_emitter(), revision, parent)
-            .await;
+        let _ = DBusMenuInstance::<MenuState, Message>::layout_updated(
+            iface_ref.signal_emitter(),
+            revision,
+            parent,
+        )
+        .await;
 
         Ok(())
     }
@@ -141,18 +144,18 @@ where
     M::Message: 'static + Send + Sync + Clone,
     M: Send + Sync + 'static,
 {
-    pub async fn run(self) -> zbus::Result<TrayConnection<P, M>> {
+    pub async fn run(self) -> zbus::Result<TrayConnection<P::State, M::State, M::Message>> {
         let state = self.notifier_raw.boot();
 
         let instance = StatusNotifierInstance {
-            program: self.notifier_raw,
+            program: Arc::new(Box::new(self.notifier_raw)),
             state,
         };
 
         let menu_state = self.menu_raw.boot();
         let menu = self.menu_raw.menu();
         let instance_menu = DBusMenuInstance {
-            program: self.menu_raw,
+            program: Arc::new(Box::new(self.menu_raw)),
             state: menu_state,
             menu_tree: menu,
         };
@@ -169,8 +172,9 @@ where
             .await?;
         Ok(TrayConnection {
             conn,
-            _notify_item: PhantomData,
-            _menu_item: PhantomData,
+            _state: PhantomData,
+            _menu_state: PhantomData,
+            _message: PhantomData,
         })
     }
     pub fn with_tool_tip(

@@ -100,7 +100,6 @@ async fn main() {
         .with_context_menu(Base::context_menu)
         .with_scroll(Base::scroll)
         .with_secondary_activate(Base::secondary_activate)
-        //.with_get_group_properties(Menu::get_group_properties)
         .with_menu_status(Menu::status)
         .with_on_clicked(Menu::on_clicked)
         .run()

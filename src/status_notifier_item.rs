@@ -20,6 +20,8 @@
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 use zbus::{
     interface,
@@ -530,16 +532,15 @@ where
     }
 }
 
-pub struct StatusNotifierInstance<P: StatusNotifierItem> {
-    pub(crate) program: P,
-    pub(crate) state: P::State,
+pub struct StatusNotifierInstance<State> {
+    pub(crate) program: Arc<Box<dyn StatusNotifierItem<State = State> + Send + Sync>>,
+    pub(crate) state: State,
 }
 
 #[interface(name = "org.kde.StatusNotifierItem")]
-impl<P: StatusNotifierItem> StatusNotifierInstance<P>
+impl<State> StatusNotifierInstance<State>
 where
-    P: Send + Sync + 'static,
-    P::State: 'static + Send + Sync,
+    State: 'static + Send + Sync,
 {
     fn activate(&mut self, x: i32, y: i32) -> zbus::fdo::Result<()> {
         self.program.activate(&mut self.state, x, y)

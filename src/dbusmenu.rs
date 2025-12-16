@@ -20,6 +20,7 @@
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use std::ops::Deref;
+use std::sync::Arc;
 use std::sync::atomic::{self, AtomicI32};
 
 use serde::{Deserialize, Serialize};
@@ -138,6 +139,12 @@ pub enum MenuUnit<Message: Clone> {
 
 #[derive(Debug, Clone)]
 pub struct MenuTree<Message: Clone>(MenuUnit<Message>);
+
+impl<Message: Clone> Default for MenuTree<Message> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl<Message: Clone> MenuTree<Message> {
     pub fn new() -> Self {
@@ -386,9 +393,7 @@ impl<Message: Clone> MenuUnit<Message> {
         if self.id_or_ids().contains_id(id) {
             return Some(self);
         }
-        let Some(sub_menus) = self.sub_menus() else {
-            return None;
-        };
+        let sub_menus = self.sub_menus()?;
         for menu in sub_menus {
             if let Some(menu) = menu.find_menu_by_id(id) {
                 return Some(menu);
@@ -400,9 +405,7 @@ impl<Message: Clone> MenuUnit<Message> {
         if self.id_or_ids().contains_id(id) {
             return Some(self);
         }
-        let Some(sub_menus) = self.sub_menus_mut() else {
-            return None;
-        };
+        let sub_menus = self.sub_menus_mut()?;
         for menu in sub_menus {
             if let Some(menu) = menu.find_menu_by_id_mut(id) {
                 return Some(menu);
@@ -412,14 +415,10 @@ impl<Message: Clone> MenuUnit<Message> {
     }
     fn find_menu_and_message_by_id_mut(&mut self, id: i32) -> Option<(&mut Self, Message)> {
         if self.id_or_ids().contains_id(id) {
-            let Some(message) = self.message(id) else {
-                return None;
-            };
+            let message = self.message(id)?;
             return Some((self, message));
         }
-        let Some(sub_menus) = self.sub_menus_mut() else {
-            return None;
-        };
+        let sub_menus = self.sub_menus_mut()?;
         for menu in sub_menus {
             if let Some(menu) = menu.find_menu_and_message_by_id_mut(id) {
                 return Some(menu);
@@ -475,7 +474,7 @@ impl MenuItem {
     ) -> Option<MenuItem> {
         if *self.id == parent_id {
             let mut new_menu = MenuItem {
-                id: self.id.clone(),
+                id: self.id,
                 property: self.property.clone(),
                 sub_menus: vec![],
             };
@@ -497,7 +496,7 @@ impl MenuItem {
     #[allow(clippy::only_used_in_recursion)]
     fn filiter(&self, recursion_depth: i32, property_names: &[&str]) -> MenuItem {
         let mut new_menu = MenuItem {
-            id: self.id.clone(),
+            id: self.id,
             property: self.property.clone(),
             sub_menus: vec![],
         };
@@ -613,10 +612,13 @@ pub trait DBusMenuItem {
     }
 }
 
-pub struct DBusMenuInstance<Menu: DBusMenuItem> {
-    pub(crate) program: Menu,
-    pub(crate) state: Menu::State,
-    pub(crate) menu_tree: MenuTree<Menu::Message>,
+pub struct DBusMenuInstance<State, Message>
+where
+    Message: Clone,
+{
+    pub(crate) program: Arc<Box<dyn DBusMenuItem<State = State, Message = Message> + Send + Sync>>,
+    pub(crate) state: State,
+    pub(crate) menu_tree: MenuTree<Message>,
 }
 
 pub trait DBusMenuBootFn<State> {
@@ -792,11 +794,10 @@ where
 }
 
 #[interface(name = "com.canonical.dbusmenu")]
-impl<Menu: DBusMenuItem> DBusMenuInstance<Menu>
+impl<State, Message> DBusMenuInstance<State, Message>
 where
-    Menu: Send + Sync + 'static,
-    Menu::State: 'static + Send + Sync,
-    Menu::Message: 'static + Send + Sync + Clone,
+    State: 'static + Send + Sync,
+    Message: 'static + Send + Sync + Clone,
 {
     fn about_to_show(&mut self, id: i32) -> zbus::fdo::Result<bool> {
         self.program.about_to_show(&mut self.state, id)
@@ -881,10 +882,13 @@ where
         let revision = self.program.revision(&self.state);
         match need_update {
             EventUpdate::UpdateCurrent => {
-                let _ = DBusMenuInstance::<Menu>::layout_updated(&cxts, revision, id).await;
+                let _ =
+                    DBusMenuInstance::<State, Message>::layout_updated(&cxts, revision, id).await;
             }
             EventUpdate::UpdateAll => {
-                let _ = DBusMenuInstance::<Menu>::layout_updated(&cxts, revision, *Id::MAIN).await;
+                let _ =
+                    DBusMenuInstance::<State, Message>::layout_updated(&cxts, revision, *Id::MAIN)
+                        .await;
             }
             _ => {}
         }
@@ -936,10 +940,12 @@ where
         }
         let revision = self.program.revision(&self.state);
         if update_all {
-            let _ = DBusMenuInstance::<Menu>::layout_updated(&cxts, revision, *Id::MAIN).await;
+            let _ = DBusMenuInstance::<State, Message>::layout_updated(&cxts, revision, *Id::MAIN)
+                .await;
         } else {
             for id in update_parents {
-                let _ = DBusMenuInstance::<Menu>::layout_updated(&cxts, revision, id).await;
+                let _ =
+                    DBusMenuInstance::<State, Message>::layout_updated(&cxts, revision, id).await;
             }
         }
         Ok(output)
