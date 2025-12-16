@@ -533,7 +533,7 @@ where
 }
 
 pub struct StatusNotifierInstance<State> {
-    pub(crate) program: Arc<Box<dyn StatusNotifierItem<State = State> + Send + Sync>>,
+    pub(crate) program: Box<dyn StatusNotifierItem<State = State> + Send + Sync>,
     pub(crate) state: State,
 }
 

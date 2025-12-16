@@ -20,7 +20,6 @@
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use std::ops::Deref;
-use std::sync::Arc;
 use std::sync::atomic::{self, AtomicI32};
 
 use serde::{Deserialize, Serialize};
@@ -616,7 +615,7 @@ pub struct DBusMenuInstance<State, Message>
 where
     Message: Clone,
 {
-    pub(crate) program: Arc<Box<dyn DBusMenuItem<State = State, Message = Message> + Send + Sync>>,
+    pub(crate) program: Box<dyn DBusMenuItem<State = State, Message = Message> + Send + Sync>,
     pub(crate) state: State,
     pub(crate) menu_tree: MenuTree<Message>,
 }

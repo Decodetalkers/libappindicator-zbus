@@ -14,7 +14,7 @@ use crate::{
     status_notifier_watcher::StatusNotifierWatcherProxy,
     utils::{Category, IconPixmap, MenuTree, TextDirection, ToolTip},
 };
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 use zbus::connection;
 
@@ -148,14 +148,14 @@ where
         let state = self.notifier_raw.boot();
 
         let instance = StatusNotifierInstance {
-            program: Arc::new(Box::new(self.notifier_raw)),
+            program: Box::new(self.notifier_raw),
             state,
         };
 
         let menu_state = self.menu_raw.boot();
         let menu = self.menu_raw.menu();
         let instance_menu = DBusMenuInstance {
-            program: Arc::new(Box::new(self.menu_raw)),
+            program: Box::new(self.menu_raw),
             state: menu_state,
             menu_tree: menu,
         };
