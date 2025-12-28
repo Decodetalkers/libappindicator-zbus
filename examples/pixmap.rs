@@ -64,7 +64,7 @@ impl Menu {
 
     fn menu() -> MenuTree<Message> {
         MenuTree::new()
-            .push_sub_menu(MenuUnit::button(
+            .push(MenuUnit::button(
                 ButtonOptions {
                     label: "Hello".to_owned(),
                     enabled: true,
@@ -72,7 +72,7 @@ impl Menu {
                 },
                 Message::Clicked,
             ))
-            .push_sub_menu(MenuUnit::button(
+            .push(MenuUnit::button(
                 ButtonOptions {
                     label: "World".to_owned(),
                     icon_name: "fcitx_pinyin".to_owned(),
@@ -80,7 +80,7 @@ impl Menu {
                 },
                 Message::Toggled,
             ))
-            .push_sub_menu(MenuUnit::toggle_group(vec![
+            .push(MenuUnit::toggle_group(vec![
                 RadioInitOption {
                     options: RadioOptions {
                         label: "A".to_owned(),

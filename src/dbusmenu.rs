@@ -137,6 +137,43 @@ pub enum MenuUnit<Message: Clone> {
 }
 
 #[derive(Debug, Clone)]
+struct RadioButtonBuilder<Message: Clone> {
+    options: RadioOptions,
+    message: Message,
+}
+
+#[derive(Debug, Clone)]
+pub struct RadioGroupBuilder<Message: Clone> {
+    buttons: Vec<RadioButtonBuilder<Message>>,
+}
+
+impl<Message: Clone> RadioGroupBuilder<Message> {
+    pub fn new() -> Self {
+        Self {
+            buttons: Vec::new(),
+        }
+    }
+
+    pub fn append_option(mut self, options: RadioOptions, message: Message) -> Self {
+        self.buttons.push(RadioButtonBuilder { options, message });
+        self
+    }
+
+    fn build(self) -> MenuUnit<Message> {
+        let mut selections = vec![];
+
+        for RadioButtonBuilder { options, message } in self.buttons {
+            selections.push(MenuUnit::RadioButton {
+                id: Id::unique(),
+                options,
+                message,
+            });
+        }
+        MenuUnit::RadioGroup { selections }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct MenuTree<Message: Clone>(MenuUnit<Message>);
 
 impl<Message: Clone> Default for MenuTree<Message> {
@@ -149,8 +186,8 @@ impl<Message: Clone> MenuTree<Message> {
     pub fn new() -> Self {
         Self(MenuUnit::root())
     }
-    pub fn push_sub_menu(mut self, menu: MenuUnit<Message>) -> Self {
-        self.0 = self.0.push_sub_menu(menu);
+    pub fn push(mut self, menu: MenuUnit<Message>) -> Self {
+        self.0 = self.0.push(menu);
         self
     }
     fn get_unit_mut(&mut self) -> &mut MenuUnit<Message> {
@@ -357,6 +394,10 @@ impl<Message: Clone> MenuUnit<Message> {
         }
     }
 
+    pub fn radio_group(group: RadioGroupBuilder<Message>) -> Self {
+        group.build()
+    }
+
     pub fn toggle_group(init_options: Vec<RadioInitOption<Message>>) -> Self {
         let selections = init_options
             .into_iter()
@@ -371,7 +412,7 @@ impl<Message: Clone> MenuUnit<Message> {
         Self::RadioGroup { selections }
     }
 
-    pub fn push_sub_menu(mut self, menu: Self) -> Self {
+    pub fn push(mut self, menu: Self) -> Self {
         let Some(sub_menus) = self.sub_menus_mut() else {
             return self;
         };
@@ -491,7 +532,6 @@ impl MenuItem {
         None
     }
 
-    #[allow(unused)]
     #[allow(clippy::only_used_in_recursion)]
     fn filiter(&self, recursion_depth: i32, property_names: &[&str]) -> MenuItem {
         let mut new_menu = MenuItem {
