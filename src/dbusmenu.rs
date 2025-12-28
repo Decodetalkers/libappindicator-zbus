@@ -154,7 +154,7 @@ impl<Message: Clone> RadioGroupBuilder<Message> {
         }
     }
 
-    pub fn append_option(mut self, options: RadioOptions, message: Message) -> Self {
+    pub fn append(mut self, options: RadioOptions, message: Message) -> Self {
         self.buttons.push(RadioButtonBuilder { options, message });
         self
     }
@@ -217,12 +217,6 @@ pub struct RadioOptions {
     pub icon_name: String,
     pub toggle_type: ToggleType,
     pub toggle_state: ToggleState,
-}
-
-#[derive(Debug, Clone)]
-pub struct RadioInitOption<Message: Clone> {
-    pub options: RadioOptions,
-    pub message: Message,
 }
 
 impl<Message: Clone> From<&MenuUnit<Message>> for MenuItem {
@@ -396,20 +390,6 @@ impl<Message: Clone> MenuUnit<Message> {
 
     pub fn radio_group(group: RadioGroupBuilder<Message>) -> Self {
         group.build()
-    }
-
-    pub fn toggle_group(init_options: Vec<RadioInitOption<Message>>) -> Self {
-        let selections = init_options
-            .into_iter()
-            .map(
-                |RadioInitOption { options, message }| MenuUnit::RadioButton {
-                    id: Id::unique(),
-                    options,
-                    message,
-                },
-            )
-            .collect();
-        Self::RadioGroup { selections }
     }
 
     pub fn push(mut self, menu: Self) -> Self {

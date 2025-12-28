@@ -2,7 +2,7 @@ use libappindicator_zbus::{
     tray,
     utils::{
         ButtonOptions, Category, EventUpdate, IconPixmap, MenuStatus, MenuTree, MenuUnit,
-        RadioInitOption, RadioOptions,
+        RadioGroupBuilder, RadioOptions,
     },
 };
 use zbus::fdo::Result;
@@ -63,6 +63,23 @@ impl Menu {
     }
 
     fn menu() -> MenuTree<Message> {
+        let group = RadioGroupBuilder::new()
+            .append(
+                RadioOptions {
+                    label: "A".to_owned(),
+                    enabled: true,
+                    ..Default::default()
+                },
+                Message::Toggled,
+            )
+            .append(
+                RadioOptions {
+                    label: "B".to_owned(),
+                    enabled: true,
+                    ..Default::default()
+                },
+                Message::Toggled,
+            );
         MenuTree::new()
             .push(MenuUnit::button(
                 ButtonOptions {
@@ -80,24 +97,7 @@ impl Menu {
                 },
                 Message::Toggled,
             ))
-            .push(MenuUnit::toggle_group(vec![
-                RadioInitOption {
-                    options: RadioOptions {
-                        label: "A".to_owned(),
-                        enabled: true,
-                        ..Default::default()
-                    },
-                    message: Message::Toggled,
-                },
-                RadioInitOption {
-                    options: RadioOptions {
-                        label: "B".to_owned(),
-                        enabled: true,
-                        ..Default::default()
-                    },
-                    message: Message::Toggled,
-                },
-            ]))
+            .push(MenuUnit::radio_group(group))
     }
     fn status(&self) -> MenuStatus {
         MenuStatus::Normal

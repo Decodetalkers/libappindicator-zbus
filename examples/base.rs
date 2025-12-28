@@ -54,21 +54,21 @@ impl Menu {
 
     fn menu() -> MenuTree<Message> {
         let group = RadioGroupBuilder::new()
-            .append_option(
+            .append(
                 RadioOptions {
                     label: "abc".to_owned(),
                     enabled: true,
-                    toggle_type: ToggleType::Radio,
+                    toggle_type: ToggleType::Checkmark,
                     toggle_state: ToggleState::Selected,
                     ..Default::default()
                 },
                 Message::Toggled(1),
             )
-            .append_option(
+            .append(
                 RadioOptions {
                     label: "efg".to_owned(),
                     enabled: true,
-                    toggle_type: ToggleType::Radio,
+                    toggle_type: ToggleType::Checkmark,
                     toggle_state: ToggleState::UnSelected,
                     ..Default::default()
                 },
